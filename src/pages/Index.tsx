@@ -657,6 +657,43 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (value: numb
 
 const QuickScale = ({ label, low, high, value, onChange, min = 1 }: { label: string; low: string; high: string; value: number; onChange: (value: number) => void; min?: number }) => <label className="block rounded-md border bg-background p-3 shadow-[var(--shadow-soft)]"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-sm font-black">{label}</span><span className={cn("rounded-full px-2 py-1 text-xs font-black", value >= 4 ? "bg-destructive text-destructive-foreground" : value >= 3 ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground")}>{value}</span></div><input className="w-full accent-primary" type="range" min={min} max="5" step="1" value={value} onChange={(event) => onChange(Number(event.target.value))} /><div className="mt-1 flex justify-between text-xs font-bold"><span className="text-accent">{low}</span><span className="text-destructive">{high}</span></div></label>;
 
+const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishName, onRestaurantNameChange, onDishNameChange, sessionUser, onProtected, onPublished }: { imageFiles: File[]; photoPreviews: string[]; restaurantName: string; dishName: string; onRestaurantNameChange: (value: string) => void; onDishNameChange: (value: string) => void; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
+  const { toast } = useToast();
+  const [rating, setRating] = useState(5);
+  const [review, setReview] = useState("");
+  const [pricePaid, setPricePaid] = useState("");
+  const [tags, setTags] = useState("");
+  const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
+  const [temperature, setTemperature] = useState(3);
+  const [spiciness, setSpiciness] = useState(0);
+  const [sweetSavory, setSweetSavory] = useState(3);
+  const [flavorIntensity, setFlavorIntensity] = useState(4);
+  const [saving, setSaving] = useState(false);
+
+  const publishPhotoReview = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to publish your photo review.");
+    if (!imageFiles.length) return toast({ title: "Add a food photo first", variant: "destructive" });
+    const parsed = photoReviewSchema.safeParse({ restaurant_name: restaurantName, dish_name: dishName, rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain, temperature_rating: temperature, spiciness_rating: spiciness, sweet_savory_rating: sweetSavory, flavor_intensity_rating: flavorIntensity });
+    if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
+
+    setSaving(true);
+    const firstFile = imageFiles[0];
+    const ext = firstFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const imagePath = `${sessionUser.id}/${Date.now()}-${slugify(parsed.data.dish_name)}.${ext}`;
+    const upload = await supabase.storage.from("food-post-images").upload(imagePath, firstFile, { contentType: firstFile.type || "image/jpeg", upsert: false });
+    if (upload.error) { setSaving(false); return toast({ title: "Photo upload failed", description: upload.error.message, variant: "destructive" }); }
+    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const { error } = await supabase.from("food_posts").insert({ user_id: sessionUser.id, restaurant_name: parsed.data.restaurant_name, dish_name: parsed.data.dish_name, review: parsed.data.review || null, rating: parsed.data.rating, price: parsed.data.price_paid ?? null, currency: "USD", image_path: imagePath, image_url: photoPreviews[0] ?? null, ai_tags: cleanTags, extracted_data: { would_order_again: parsed.data.would_order_again, temperature_rating: parsed.data.temperature_rating, spiciness_rating: parsed.data.spiciness_rating, sweet_savory_rating: parsed.data.sweet_savory_rating, flavor_intensity_rating: parsed.data.flavor_intensity_rating, attached_photo_count: imageFiles.length }, visibility: "followers", is_draft: false });
+    setSaving(false);
+    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
+    toast({ title: "Review published", description: "Your photo review is saved to your food journal." });
+    setReview(""); setPricePaid(""); setTags(""); onPublished();
+  };
+
+  return <form id="photo-review-form" onSubmit={publishPhotoReview} className="mt-5 space-y-4 border-t pt-4"><h2 className="font-display text-3xl font-black">Complete your review</h2><div className="grid gap-3 md:grid-cols-2"><label className="text-sm font-bold">Restaurant<Input value={restaurantName} onChange={(event) => onRestaurantNameChange(event.target.value)} maxLength={120} placeholder="Restaurant name" /></label><label className="text-sm font-bold">Dish<Input value={dishName} onChange={(event) => onDishNameChange(event.target.value)} maxLength={120} placeholder="Dish name" /></label></div><div className="rounded-md border bg-background p-3"><p className="mb-2 text-sm font-black">Overall rating</p><StarRating value={rating} onChange={setRating} /></div><div className="grid gap-3 md:grid-cols-2"><QuickScale label="Temperature" low="cold" high="hot" value={temperature} onChange={setTemperature} /><QuickScale label="Spiciness" low="none" high="fire" value={spiciness} onChange={setSpiciness} min={0} /><QuickScale label="Sweet ↔ savory" low="sweet" high="savory" value={sweetSavory} onChange={setSweetSavory} /><QuickScale label="Flavor intensity" low="subtle" high="bold" value={flavorIntensity} onChange={setFlavorIntensity} /></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder="Optional note about taste, texture, value, and cravings" /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Optional tags: crispy, spicy, great value" /><Button type="submit" className="w-full" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Publish photo review</Button></form>;
+};
+
 const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
   const { toast } = useToast();
   const [rating, setRating] = useState(5);
