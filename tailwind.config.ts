@@ -13,6 +13,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        display: ["Arial Black", "Arial Narrow", "Impact", "ui-sans-serif", "system-ui"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
