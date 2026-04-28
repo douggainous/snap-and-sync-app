@@ -14,16 +14,293 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      food_posts: {
+        Row: {
+          ai_tags: string[]
+          created_at: string
+          cuisine: string | null
+          currency: string
+          dietary_tags: string[]
+          dish_name: string
+          extracted_data: Json
+          id: string
+          image_path: string | null
+          image_url: string | null
+          is_draft: boolean
+          latitude: number | null
+          longitude: number | null
+          ocr_text: string | null
+          price: number | null
+          rating: number | null
+          restaurant_id: string | null
+          restaurant_name: string
+          review: string | null
+          updated_at: string
+          user_id: string
+          visibility: Database["public"]["Enums"]["post_visibility"]
+        }
+        Insert: {
+          ai_tags?: string[]
+          created_at?: string
+          cuisine?: string | null
+          currency?: string
+          dietary_tags?: string[]
+          dish_name: string
+          extracted_data?: Json
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          is_draft?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          ocr_text?: string | null
+          price?: number | null
+          rating?: number | null
+          restaurant_id?: string | null
+          restaurant_name: string
+          review?: string | null
+          updated_at?: string
+          user_id: string
+          visibility?: Database["public"]["Enums"]["post_visibility"]
+        }
+        Update: {
+          ai_tags?: string[]
+          created_at?: string
+          cuisine?: string | null
+          currency?: string
+          dietary_tags?: string[]
+          dish_name?: string
+          extracted_data?: Json
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          is_draft?: boolean
+          latitude?: number | null
+          longitude?: number | null
+          ocr_text?: string | null
+          price?: number | null
+          rating?: number | null
+          restaurant_id?: string | null
+          restaurant_name?: string
+          review?: string | null
+          updated_at?: string
+          user_id?: string
+          visibility?: Database["public"]["Enums"]["post_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_posts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_comments: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          post_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          post_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          post_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "food_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_likes: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "food_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_saves: {
+        Row: {
+          created_at: string
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_saves_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "food_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          dietary_preferences: string[]
+          display_name: string
+          favorite_cuisines: string[]
+          id: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          dietary_preferences?: string[]
+          display_name: string
+          favorite_cuisines?: string[]
+          id?: string
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          dietary_preferences?: string[]
+          display_name?: string
+          favorite_cuisines?: string[]
+          id?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      restaurants: {
+        Row: {
+          address: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          cuisine: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_view_food_post: {
+        Args: { _post_id: string; _viewer_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      post_visibility: "public" | "followers" | "private"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +427,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      post_visibility: ["public", "followers", "private"],
+    },
   },
 } as const
