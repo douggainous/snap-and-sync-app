@@ -82,18 +82,6 @@ type MenuItem = {
   cover_image_url?: string | null;
   restaurants?: Restaurant | null;
 };
-type ExtractedMenuItem = {
-  name: string;
-  description?: string;
-  section?: string;
-  price?: number;
-  currency?: string;
-  tags?: string[];
-  confidence?: number;
-  selected: boolean;
-  rating?: string;
-  review?: string;
-};
 type MenuItemReview = {
   id: string;
   rating: number;
@@ -702,10 +690,6 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
   return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid grid-cols-2 gap-2 text-xs font-bold text-muted-foreground md:grid-cols-4"><span>Temp {review.temperature_rating ?? "—"}/5</span><span>Spice {review.spiciness_rating ?? "—"}/5</span><span>Sweet↔Savory {review.sweet_savory_rating ?? "—"}/5</span><span>Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div><p className="mt-2 text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
 };
-
-const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
-  <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
-);
 
 const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
   const { toast } = useToast();
