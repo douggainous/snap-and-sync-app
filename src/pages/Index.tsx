@@ -31,6 +31,10 @@ import {
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
+import demoPlatedNoodles from "@/assets/demo-plated-noodles.jpg";
+import demoCrispyTacos from "@/assets/demo-crispy-tacos.jpg";
+import demoBistroPlate from "@/assets/demo-bistro-plate.jpg";
+import demoDessertGelato from "@/assets/demo-dessert-gelato.jpg";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -138,6 +142,8 @@ const photoReviewSchema = reviewSchema.extend({
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DISCOVERY_PAGE_SIZE = 10;
 
+const demoImages = [ramenImage, demoPlatedNoodles, demoCrispyTacos, demoBistroPlate, demoDessertGelato];
+
 const demoDishes = [
   ["Pork Belly Bao Taco", "Luna Kitchen", "Austin", "Asian fusion", "Crispy pork belly tucked into a soft bao-style shell with pickled cucumber, scallion, and chili crunch.", "Small plates", 12, 4.8, 186, 42, ["pork belly", "bao", "taco", "crispy", "spicy"], ["contains gluten"], ramenImage],
   ["Baja Fish Tacos", "Naranja Social", "Austin", "Mexican", "Beer-battered cod, shaved cabbage, lime crema, and habanero salsa on handmade corn tortillas.", "Tacos", 15, 4.7, 243, 67, ["fish tacos", "crispy", "lime", "value"], ["pescatarian"], null],
@@ -185,7 +191,7 @@ const sampleItems: MenuItem[] = demoDishes.map(([name, restaurantName, city, cui
   aggregate_rating: rating,
   review_count: reviewCount,
   photo_count: photoCount,
-  cover_image_url: image,
+  cover_image_url: image ?? demoImages[index % demoImages.length],
   restaurants: {
     name: restaurantName,
     address: `${100 + index * 17} ${["Market", "Cedar", "Lamar", "Congress", "Garden", "Willow"][index % 6]} St`,
