@@ -1,26 +1,29 @@
-Plan to update the signed-in header account control:
+Plan to make the discovery feed feel populated without needing a Google Maps API key:
 
-1. Avatar trigger
-- Replace the current plain “Sign out” button with a circular user avatar icon in the top header.
-- Use the existing warm food palette for the avatar background and hover/focus states.
-- Keep the existing “Sign in” button for logged-out users.
+1. Add a large simulated restaurant/dish dataset
+   - Expand the current 3 sample dishes into a richer feed of many realistic restaurant/menu-item cards.
+   - Include varied cuisines, ratings, review counts, prices, descriptions, tags, neighborhoods/cities, and placeholder imagery/gradients.
 
-2. Account dropdown options
-- Add a dropdown menu opened from the avatar.
-- Include the user email at the top when available.
-- Add menu actions for:
-  - Profile: switches to the Account/Profile view
-  - Favorites: switches to the Lists/Favorites view
-  - Reviews: navigates to the Account/Profile area for now, where review history can be surfaced later
-  - Sign out: signs the user out
+2. Make simulated items behave like real feed content
+   - Keep large images/visual placeholders and prominent ratings.
+   - Preserve infinite scrolling by paging through the simulated content when backend results are empty.
+   - Avoid repeating the same cards too quickly.
 
-3. UX/accessibility polish
-- Use the existing accessible dropdown menu component from the UI library.
-- Add clear icons for each option using the existing Lucide icon set.
-- Make menu items keyboard-friendly and keep the header compact on mobile.
+3. Keep Google Maps support but make it optional
+   - Leave the existing backend function in place for later.
+   - If Google Places fails or the key is invalid, silently fall back to simulated nearby content instead of showing a blocking error.
+   - Show friendly copy like “Demo nearby picks” rather than “Google Maps not connected.”
 
-Technical details:
-- Update imports in `src/pages/Index.tsx` for the dropdown menu components and any needed icons.
-- Add a small `AccountMenu` component in `src/pages/Index.tsx` to keep the header clean.
-- Wire the dropdown actions into existing `setView`, `navigate`, and `supabase.auth.signOut()` behavior.
-- No database changes are needed for this UI update.
+4. Keep the review CTA requirement
+   - If a simulated dish has zero reviews, show `Be first to review this!`.
+   - For reviewed dishes, keep the normal review CTA.
+
+5. Improve the initial empty state
+   - On first load, the discovery feed should immediately show a full scrollable set of simulated items, even if the database has no menu items yet.
+   - Search should filter the simulated feed when no real matching data exists.
+
+Technical notes
+- Main implementation will be in `src/pages/Index.tsx`.
+- No database migration is needed.
+- No API key or external setup will be required.
+- The existing backend Google Places function can remain available for future real-data integration.

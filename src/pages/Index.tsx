@@ -138,65 +138,67 @@ const photoReviewSchema = reviewSchema.extend({
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DISCOVERY_PAGE_SIZE = 10;
 
-const sampleItems: MenuItem[] = [
-  {
-    id: "sample-pork-belly-bao-taco",
-    name: "Pork Belly Bao Taco",
-    slug: "pork-belly-bao-taco-at-luna-kitchen",
-    description: "Crispy pork belly tucked into a soft bao-style shell with pickled cucumber, scallion, and chili crunch.",
-    section: "Small plates",
-    cuisine: "Asian fusion",
-    tags: ["pork belly", "bao", "taco", "crispy", "spicy"],
-    dietary_tags: ["contains gluten"],
-    typical_price: 12,
-    price_min: 11,
-    price_max: 14,
-    currency: "USD",
-    aggregate_rating: 4.8,
-    review_count: 186,
-    photo_count: 42,
-    cover_image_url: ramenImage,
-    restaurants: { name: "Luna Kitchen", address: "214 Market St", city: "Austin", cuisine: "Asian fusion", latitude: 30.265, longitude: -97.747 },
+const demoDishes = [
+  ["Pork Belly Bao Taco", "Luna Kitchen", "Austin", "Asian fusion", "Crispy pork belly tucked into a soft bao-style shell with pickled cucumber, scallion, and chili crunch.", "Small plates", 12, 4.8, 186, 42, ["pork belly", "bao", "taco", "crispy", "spicy"], ["contains gluten"], ramenImage],
+  ["Baja Fish Tacos", "Naranja Social", "Austin", "Mexican", "Beer-battered cod, shaved cabbage, lime crema, and habanero salsa on handmade corn tortillas.", "Tacos", 15, 4.7, 243, 67, ["fish tacos", "crispy", "lime", "value"], ["pescatarian"], null],
+  ["Crispy Duck Garlic Noodles", "Kitsune Counter", "Austin", "Japanese", "Wok-tossed noodles with confit duck, black garlic, bok choy, and toasted sesame.", "Noodles", 22, 4.6, 98, 21, ["duck", "noodles", "garlic", "umami"], ["contains gluten"], null],
+  ["Hot Honey Chicken Biscuit", "June's Counter", "East Austin", "Southern", "Buttermilk fried chicken, whipped pepper butter, hot honey, and a flaky black-pepper biscuit.", "Brunch", 14, 4.9, 312, 88, ["fried chicken", "hot honey", "brunch", "crispy"], ["contains gluten"], null],
+  ["Charred Corn Elote Bowl", "Masa Verde", "Austin", "Mexican", "Fire-roasted corn, cotija, crema, lime, chile de árbol, cilantro, and crunchy tostada shards.", "Bowls", 11, 4.5, 74, 18, ["corn", "elote", "vegetarian", "lime"], ["vegetarian"], null],
+  ["Truffle Smash Burger", "Cedar & Coil", "South Congress", "American", "Double smashed patties, truffle aioli, aged cheddar, grilled onions, and pickled mustard seed.", "Burgers", 18, 4.7, 205, 53, ["burger", "truffle", "cheddar", "late night"], ["contains gluten"], null],
+  ["Saffron Lamb Dumplings", "Silk Road House", "Austin", "Central Asian", "Hand-folded lamb dumplings with saffron yogurt, chili oil, mint, and crispy shallots.", "Dumplings", 16, 4.8, 121, 34, ["lamb", "dumplings", "chili oil", "savory"], ["contains gluten"], null],
+  ["Coconut Curry Mussels", "Harbor Finch", "Rainey Street", "Seafood", "Steamed mussels in coconut lemongrass curry with basil, lime, and grilled sourdough.", "Seafood", 19, 4.4, 63, 16, ["mussels", "curry", "coconut", "shareable"], ["pescatarian"], null],
+  ["Miso Caramel Bread Pudding", "Paper Lantern", "Austin", "Japanese bakery", "Custardy milk bread, miso caramel, sesame crumble, and vanilla cream.", "Dessert", 10, 4.9, 89, 27, ["dessert", "miso caramel", "sweet", "bakery"], ["vegetarian"], null],
+  ["Green Chile Birria Ramen", "Caldera Noodle Bar", "Austin", "Mexican Japanese", "Beef birria broth, springy noodles, green chile tare, onion, cilantro, and consommé on the side.", "Ramen", 17, 4.6, 158, 44, ["birria", "ramen", "brothy", "spicy"], ["contains gluten"], null],
+  ["Smoked Beet Reuben", "Garden Gram", "Hyde Park", "Vegetarian", "Smoked beets, kraut, Swiss, rye, and tangy comeback sauce pressed until crisp.", "Sandwiches", 13, 4.3, 0, 9, ["vegetarian", "reuben", "smoked", "sandwich"], ["vegetarian", "contains gluten"], null],
+  ["Tamarind Glazed Ribs", "Ember Yard", "Austin", "Thai BBQ", "Sticky pork ribs glazed with tamarind, fish sauce caramel, toasted rice, and herbs.", "BBQ", 24, 4.8, 177, 51, ["ribs", "tamarind", "bbq", "sticky"], [], null],
+  ["Whipped Feta & Chili Crisp Pita", "Fig & Stone", "Austin", "Mediterranean", "Cloudy feta, lemon oil, chili crisp, herbs, and warm blistered pita.", "Mezze", 12, 4.5, 91, 24, ["feta", "pita", "chili crisp", "shareable"], ["vegetarian", "contains gluten"], null],
+  ["Black Garlic Steak Frites", "Rue Alder", "Downtown Austin", "French", "Seared hanger steak, black garlic butter, crisp fries, and peppery watercress.", "Mains", 29, 4.6, 140, 33, ["steak", "fries", "black garlic", "date night"], [], null],
+  ["Achiote Shrimp Tostada", "Mar Brava", "Austin", "Coastal Mexican", "Crunchy tostada with achiote shrimp, avocado, pickled onion, crema, and lime.", "Tostadas", 14, 4.7, 118, 39, ["shrimp", "tostada", "avocado", "fresh"], ["pescatarian"], null],
+  ["Cacio e Pepe Arancini", "Little Juniper", "Austin", "Italian", "Risotto fritters packed with pecorino, black pepper, and molten mozzarella.", "Antipasti", 11, 4.4, 0, 12, ["arancini", "cheese", "crispy", "italian"], ["vegetarian"], null],
+  ["Maple Gochujang Wings", "Birdcall Social", "Austin", "Korean American", "Double-fried wings lacquered in maple gochujang with sesame, scallion, and ranch dust.", "Wings", 15, 4.8, 264, 72, ["wings", "gochujang", "sweet heat", "crispy"], [], null],
+  ["Roasted Mushroom Laksa", "Lime Leaf Room", "Austin", "Malaysian", "Coconut curry noodle soup with roasted mushrooms, tofu puffs, herbs, and sambal.", "Soup", 16, 4.5, 77, 20, ["laksa", "mushroom", "coconut", "noodles"], ["vegetarian", "contains gluten"], null],
+  ["Cardamom French Toast", "Morning Ritual", "Austin", "Brunch", "Thick-cut challah, cardamom custard, berry compote, pistachio, and maple cream.", "Breakfast", 14, 4.6, 132, 41, ["french toast", "cardamom", "brunch", "sweet"], ["vegetarian", "contains gluten"], null],
+  ["Crispy Rice Tuna Bites", "Koji Room", "Austin", "Sushi", "Golden crispy rice topped with spicy tuna, avocado, jalapeño, and eel sauce.", "Sushi bar", 18, 4.7, 219, 58, ["tuna", "crispy rice", "sushi", "spicy"], ["pescatarian"], null],
+  ["Harissa Carrot Shawarma", "Olive Radio", "Austin", "Middle Eastern", "Roasted carrots, harissa, tahini, pickles, herbs, and fluffy laffa.", "Wraps", 12, 4.2, 0, 8, ["carrot", "shawarma", "harissa", "veggie"], ["vegetarian", "contains gluten"], null],
+  ["Short Rib Quesabirria", "Taco Fuego", "East Austin", "Mexican", "Crisped tortillas stuffed with short rib, Oaxaca cheese, onion, cilantro, and consommé.", "Tacos", 16, 4.9, 386, 96, ["quesabirria", "short rib", "cheesy", "consommé"], [], null],
+  ["Lobster Kimchi Fried Rice", "Seoul Harbor", "Austin", "Korean seafood", "Wok-seared rice with lobster, ripe kimchi, egg, scallion, and toasted nori.", "Rice", 26, 4.6, 104, 29, ["lobster", "kimchi", "fried rice", "seafood"], ["pescatarian"], null],
+  ["Pistachio Rose Gelato", "Dolce Neon", "Austin", "Gelato", "Dense pistachio gelato with rose syrup, toasted pistachios, and sea salt.", "Dessert", 8, 4.4, 52, 17, ["gelato", "pistachio", "rose", "dessert"], ["vegetarian"], null],
+  ["Nashville Hot Cauliflower", "Violet Diner", "Austin", "New American", "Crispy cauliflower tossed in hot oil spice with pickles and cooling herb ranch.", "Snacks", 11, 4.1, 0, 6, ["cauliflower", "nashville hot", "vegetarian", "spicy"], ["vegetarian"], null],
+  ["Sesame Scallion Pancake Wrap", "Lucky Wok Window", "Austin", "Chinese", "Flaky scallion pancake wrapped around roast chicken, cucumber, herbs, and hoisin chile sauce.", "Street food", 13, 4.5, 95, 25, ["scallion pancake", "wrap", "hoisin", "street food"], ["contains gluten"], null],
+  ["Blue Corn Chilaquiles", "Comal & Sun", "Austin", "Mexican brunch", "Blue corn chips simmered in salsa verde with crema, cotija, egg, and avocado.", "Brunch", 15, 4.6, 149, 37, ["chilaquiles", "brunch", "salsa verde", "avocado"], ["vegetarian"], null],
+  ["Brown Butter Scallops", "Lenoir Lane", "Austin", "Modern American", "Seared scallops, brown butter, lemon, capers, cauliflower purée, and crisp herbs.", "Seafood", 31, 4.7, 83, 19, ["scallops", "brown butter", "seafood", "date night"], ["pescatarian"], null],
+] as const;
+
+const sampleItems: MenuItem[] = demoDishes.map(([name, restaurantName, city, cuisine, description, section, price, rating, reviewCount, photoCount, tags, dietaryTags, image], index) => ({
+  id: `demo-${index + 1}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+  name,
+  slug: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-at-${restaurantName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+  description,
+  section,
+  cuisine,
+  tags: [...tags],
+  dietary_tags: [...dietaryTags],
+  typical_price: price,
+  price_min: Math.max(6, price - 1),
+  price_max: price + 2,
+  currency: "USD",
+  aggregate_rating: rating,
+  review_count: reviewCount,
+  photo_count: photoCount,
+  cover_image_url: image,
+  restaurants: {
+    name: restaurantName,
+    address: `${100 + index * 17} ${["Market", "Cedar", "Lamar", "Congress", "Garden", "Willow"][index % 6]} St`,
+    city,
+    cuisine,
+    latitude: 30.2672 + ((index % 7) - 3) * 0.012,
+    longitude: -97.7431 + ((index % 9) - 4) * 0.014,
+    rating,
+    review_count: reviewCount,
+    price_level: price >= 26 ? 3 : price >= 16 ? 2 : 1,
+    maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurantName} ${city}`)}`,
   },
-  {
-    id: "sample-fish-tacos",
-    name: "Baja Fish Tacos",
-    slug: "baja-fish-tacos-at-naranja-social",
-    description: "Beer-battered cod, shaved cabbage, lime crema, and habanero salsa on handmade corn tortillas.",
-    section: "Tacos",
-    cuisine: "Mexican",
-    tags: ["fish tacos", "crispy", "lime", "value"],
-    dietary_tags: ["pescatarian"],
-    typical_price: 15,
-    price_min: 14,
-    price_max: 16,
-    currency: "USD",
-    aggregate_rating: 4.7,
-    review_count: 243,
-    photo_count: 67,
-    cover_image_url: null,
-    restaurants: { name: "Naranja Social", address: "88 East 6th St", city: "Austin", cuisine: "Mexican", latitude: 30.267, longitude: -97.739 },
-  },
-  {
-    id: "sample-duck-noodles",
-    name: "Crispy Duck Garlic Noodles",
-    slug: "crispy-duck-garlic-noodles-at-kitsune-counter",
-    description: "Wok-tossed noodles with confit duck, black garlic, bok choy, and toasted sesame.",
-    section: "Noodles",
-    cuisine: "Japanese",
-    tags: ["duck", "noodles", "garlic", "umami"],
-    dietary_tags: ["contains gluten"],
-    typical_price: 22,
-    price_min: 21,
-    price_max: 24,
-    currency: "USD",
-    aggregate_rating: 4.6,
-    review_count: 98,
-    photo_count: 21,
-    cover_image_url: null,
-    restaurants: { name: "Kitsune Counter", address: "501 North Lamar", city: "Austin", cuisine: "Japanese", latitude: 30.272, longitude: -97.752 },
-  },
-];
+}));
 
 const sampleReviews = [
   { author: "Maya", rating: 5, text: "The shell eats like a bao but carries the crunch of a taco. The pork belly is the reason to go." },
@@ -212,6 +214,13 @@ const navItems = [
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
+const filterDemoItems = (term: string) => {
+  const search = term.trim().toLowerCase();
+  if (!search) return sampleItems;
+  const filtered = sampleItems.filter((item) => `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.cuisine ?? ""} ${item.restaurants?.name ?? ""} ${item.restaurants?.city ?? ""}`.toLowerCase().includes(search));
+  return filtered.length ? filtered : sampleItems;
+};
+const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
 const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -293,7 +302,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave, onFirstReview }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -321,7 +330,7 @@ const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLoca
         </div>
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />{item.review_count > 0 ? "Review" : "Be first to review this!"}</a></Button>
+          {item.review_count > 0 ? <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" onClick={() => onFirstReview?.(item)}><Star />Be first to review this!</Button>}
           <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
@@ -344,7 +353,7 @@ const Index = () => {
   const [sessionUser, setSessionUser] = useState<UserSession>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
-  const [query, setQuery] = useState(searchParams.get("q") ?? "pork belly bao taco");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [items, setItems] = useState<MenuItem[]>(sampleItems);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -426,12 +435,14 @@ const Index = () => {
       .order("review_count", { ascending: false })
       .range(offset, offset + DISCOVERY_PAGE_SIZE - 1);
 
-    const rows = !error && data?.length ? data as unknown as MenuItem[] : [];
-    setHasMoreItems(rows.length === DISCOVERY_PAGE_SIZE);
+    const realRows = !error && data?.length ? data as unknown as MenuItem[] : [];
+    const rows = realRows.length ? realRows : demoPage(term, offset);
+    const demoTotal = filterDemoItems(term).length;
+    setHasMoreItems(realRows.length ? rows.length === DISCOVERY_PAGE_SIZE : offset + rows.length < demoTotal);
     if (append) {
       setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
     } else {
-      setItems(rows.length ? rows : sampleItems);
+      setItems(rows.length ? rows : sampleItems.slice(0, DISCOVERY_PAGE_SIZE));
     }
     setLoading(false);
     setLoadingMore(false);
@@ -471,11 +482,13 @@ const Index = () => {
     const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
     setLoadingNearby(false);
     if (error || data?.error) {
-      toast({ title: "Google Maps not connected", description: data?.error || error?.message || "Add a Google Maps API key to preload nearby restaurants.", variant: "destructive" });
+      setNearbyRestaurants(sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
+      toast({ title: "Demo nearby picks loaded", description: "Using simulated restaurants while Google Maps is unavailable." });
       return;
     }
-    setNearbyRestaurants((data.restaurants ?? []) as Restaurant[]);
-    toast({ title: "Nearby restaurants loaded", description: `Found ${(data.restaurants ?? []).length} restaurants within 50 miles.` });
+    const restaurants = ((data.restaurants ?? []) as Restaurant[]);
+    setNearbyRestaurants(restaurants.length ? restaurants : sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
+    toast({ title: restaurants.length ? "Nearby restaurants loaded" : "Demo nearby picks loaded", description: restaurants.length ? `Found ${restaurants.length} restaurants within 50 miles.` : "Using simulated restaurants for the feed." });
   };
 
   const askLocation = () => navigator.geolocation?.getCurrentPosition(
@@ -491,6 +504,14 @@ const Index = () => {
   const requireAuth = (message: string) => {
     if (!sessionUser) setAuthPrompt(message);
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
+  };
+
+  const startFirstReview = (item: MenuItem) => {
+    setScanRestaurant(item.restaurants?.name ?? "");
+    setScanDish(item.name);
+    setView("scan");
+    navigate("/");
+    requestAnimationFrame(() => document.getElementById("photo-review-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
   const addReviewPhotos = (files: File[], previews: string[]) => {
@@ -586,7 +607,7 @@ const Index = () => {
               </section>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
