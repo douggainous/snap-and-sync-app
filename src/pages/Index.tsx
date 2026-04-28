@@ -17,12 +17,15 @@ import {
   MapPin,
   Navigation,
   Plus,
+  Phone,
   Search,
   Share2,
   Sparkles,
   Star,
   Upload,
   User,
+  Globe,
+  Mail,
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
@@ -45,6 +48,9 @@ type Restaurant = {
   cuisine?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  phone?: string | null;
+  website_url?: string | null;
+  email?: string | null;
 };
 type MenuItem = {
   id: string;
