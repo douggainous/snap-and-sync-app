@@ -460,7 +460,7 @@ const Index = () => {
   const confirmItems = async () => {
     const selected = extractedItems.filter((item) => item.selected && item.name.trim());
     if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
-    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items, reviews, and your contribution history.");
+    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items and your contribution history.");
     const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
     const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
     const rows = selected.map((item) => ({
@@ -499,7 +499,7 @@ const Index = () => {
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
           <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /></form>
           <Button variant="outline" onClick={askLocation}><LocateFixed />Near me</Button>
-          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only to save favorites, reviews, lists, or contribution history.")}><LogIn />Sign in</Button>}
+          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
@@ -693,6 +693,6 @@ const ShareableLists = ({ sessionUser, onProtected }: { sessionUser: UserSession
   return <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Your food lists</h1><p className="mt-2 text-muted-foreground">Public lists can be shared with friends; private lists stay just for you.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{lists.map((list) => <div key={list.id} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list.title}</h2><p className="mt-1 text-xs font-bold text-accent">{list.is_public ? "Public" : "Private"}</p><p className="mt-2 text-sm text-muted-foreground">{list.description || "Saved menu items, prices, ratings, and directions."}</p>{list.is_public && <Button className="mt-3" variant="outline" asChild><a href={`/lists/${list.slug}`}><Share2 />Open share page</a></Button>}</div>)}</div></section>;
 };
 
-const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. Your saved favorites, reviews, lists, and contribution history stay synced.</p> : <><p className="mt-2 text-muted-foreground">Browse, search, take photos, and extract menu items without an account. Sign in only when you want to save something.</p><Button className="mt-4" onClick={() => onProtected("Sign in to save favorites, reviews, lists, and contribution history.")}><LogIn />Sign in</Button></>}</section>;
+const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. Your saved favorites, reviews, lists, and contribution history stay synced.</p> : <><p className="mt-2 text-muted-foreground">Browse, search, take photos, extract menu items, and draft reviews without an account. Sign in only when you submit or save something.</p><Button className="mt-4" onClick={() => onProtected("Sign in to save favorites, lists, and contribution history.")}><LogIn />Sign in</Button></>}</section>;
 
 export default Index;
