@@ -123,6 +123,11 @@ const listSchema = z.object({
   is_public: z.boolean(),
 });
 
+const photoReviewSchema = reviewSchema.extend({
+  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(120, "Keep restaurant names under 120 characters."),
+  dish_name: z.string().trim().min(2, "Dish name is required.").max(120, "Keep dish names under 120 characters."),
+});
+
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const sampleItems: MenuItem[] = [
@@ -480,12 +485,14 @@ const Index = () => {
 
   const startPhotoReview = async () => {
     if (!imageFiles.length) return toast({ title: "Add a food photo first", description: "Take or select at least one dish photo to start a review.", variant: "destructive" });
-    const nextQuery = scanDish.trim() || scanRestaurant.trim() || query;
-    setQuery(nextQuery);
-    setView("discover");
-    navigate(`/search?q=${encodeURIComponent(nextQuery)}`);
-    await loadItems(nextQuery);
-    toast({ title: "Photos ready", description: "Choose the matching dish, then post your review with your ratings." });
+    document.getElementById("photo-review-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const resetPhotoReview = () => {
+    setImageFiles([]);
+    setPhotoPreviews([]);
+    setScanRestaurant("");
+    setScanDish("");
   };
 
   const displayedItems = useMemo(() => {
@@ -544,6 +551,7 @@ const Index = () => {
               <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={chooseReviewPhotos} />
               <input ref={photoLibraryInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple className="hidden" onChange={chooseReviewPhotos} />
               <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button type="button" className="h-12" onClick={captureReviewPhoto}><CameraIcon />{photoPreviews.length ? "Add photo" : "Take photo"}</Button><Button type="button" className="h-12" variant="outline" onClick={selectPhotos}><Upload />Select photos</Button><Button type="button" className="h-12" onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
+              {imageFiles.length > 0 && <PhotoReviewComposer imageFiles={imageFiles} photoPreviews={photoPreviews} restaurantName={scanRestaurant} dishName={scanDish} onRestaurantNameChange={setScanRestaurant} onDishNameChange={setScanDish} sessionUser={sessionUser} onProtected={requireAuth} onPublished={resetPhotoReview} />}
             </section>
           )}
 
