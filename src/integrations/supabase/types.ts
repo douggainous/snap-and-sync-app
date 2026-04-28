@@ -593,46 +593,67 @@ export type Database = {
       restaurants: {
         Row: {
           address: string | null
+          business_status: string | null
           city: string | null
           created_at: string
           created_by: string | null
           cuisine: string | null
           email: string | null
+          google_place_id: string | null
           id: string
           latitude: number | null
           longitude: number | null
+          maps_url: string | null
           name: string
           phone: string | null
+          photo_reference: string | null
+          price_level: number | null
+          rating: number | null
+          review_count: number | null
           updated_at: string
           website_url: string | null
         }
         Insert: {
           address?: string | null
+          business_status?: string | null
           city?: string | null
           created_at?: string
           created_by?: string | null
           cuisine?: string | null
           email?: string | null
+          google_place_id?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
+          maps_url?: string | null
           name: string
           phone?: string | null
+          photo_reference?: string | null
+          price_level?: number | null
+          rating?: number | null
+          review_count?: number | null
           updated_at?: string
           website_url?: string | null
         }
         Update: {
           address?: string | null
+          business_status?: string | null
           city?: string | null
           created_at?: string
           created_by?: string | null
           cuisine?: string | null
           email?: string | null
+          google_place_id?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
+          maps_url?: string | null
           name?: string
           phone?: string | null
+          photo_reference?: string | null
+          price_level?: number | null
+          rating?: number | null
+          review_count?: number | null
           updated_at?: string
           website_url?: string | null
         }
