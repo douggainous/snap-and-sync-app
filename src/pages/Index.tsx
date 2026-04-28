@@ -291,6 +291,7 @@ const Index = () => {
   const [extracting, setExtracting] = useState(false);
   const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
 
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
@@ -471,7 +472,7 @@ const Index = () => {
             </>
           )}
 
-          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} onProtected={requireAuth} />}
+          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
