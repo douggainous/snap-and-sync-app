@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
@@ -627,7 +627,46 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
 
-const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => <div className="flex gap-1" aria-label="Rating out of 5 stars">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" onClick={() => onChange(star)} className={cn("rounded-md p-1 transition hover:scale-105", star <= value ? "text-accent drop-shadow-sm" : "text-muted-foreground/35 hover:text-primary")} aria-label={`${star} stars`}><Star className={cn("size-8", star <= value && "fill-current")} /></button>)}</div>;
+const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => {
+  const chooseRating = (star: number, event: MouseEvent<HTMLButtonElement>) => {
+    const { left, width } = event.currentTarget.getBoundingClientRect();
+    const isHalf = event.clientX - left < width / 2;
+    onChange(star - (isHalf ? 0.5 : 0));
+  };
+  const nudgeRating = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp"].includes(event.key)) return;
+    event.preventDefault();
+    const delta = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -0.5 : 0.5;
+    onChange(Math.min(5, Math.max(1, value + delta)));
+  };
+  return (
+    <div className="flex gap-1" aria-label={`Rating: ${value} out of 5 stars`} onKeyDown={nudgeRating}>
+      {[1, 2, 3, 4, 5].map((star) => {
+        const fillPercent = value >= star ? 100 : value >= star - 0.5 ? 50 : 0;
+        return (
+          <button
+            key={star}
+            type="button"
+            onClick={(event) => chooseRating(star, event)}
+            className={cn(
+              "group relative rounded-md p-1 transition duration-200 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              fillPercent ? "text-accent drop-shadow-sm" : "text-muted-foreground/35 hover:text-primary",
+            )}
+            aria-label={`${star - 0.5} or ${star} stars`}
+            aria-pressed={fillPercent > 0}
+          >
+            <span className="relative block size-8">
+              <Star className="absolute inset-0 size-8 transition-colors duration-200" />
+              <span className="absolute inset-0 overflow-hidden transition-all duration-200 ease-out" style={{ width: `${fillPercent}%` }}>
+                <Star className="size-8 fill-current text-accent transition-transform duration-200 group-hover:scale-110" />
+              </span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const QuickScale = ({ label, low, high, value, onChange, min = 1 }: { label: string; low: string; high: string; value: number; onChange: (value: number) => void; min?: number }) => <label className="block rounded-md border bg-background p-3 shadow-[var(--shadow-soft)]"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-sm font-black">{label}</span><span className={cn("rounded-full px-2 py-1 text-xs font-black", value >= 4 ? "bg-destructive text-destructive-foreground" : value >= 3 ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground")}>{value}</span></div><input className="w-full accent-primary" type="range" min={min} max="5" step="1" value={value} onChange={(event) => onChange(Number(event.target.value))} /><div className="mt-1 flex justify-between text-xs font-bold"><span className="text-accent">{low}</span><span className="text-destructive">{high}</span></div></label>;
 
