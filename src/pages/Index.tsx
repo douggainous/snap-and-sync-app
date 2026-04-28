@@ -172,6 +172,16 @@ const navItems = [
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
+const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
+const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
+  let meta = document.querySelector<HTMLMetaElement>(selector);
+  if (!meta) {
+    meta = document.createElement("meta");
+    Object.entries(attributes).forEach(([key, value]) => meta?.setAttribute(key, value));
+    document.head.appendChild(meta);
+  }
+  meta.content = content;
+};
 const distanceMiles = (from: { latitude: number; longitude: number } | null, to?: Restaurant | null) => {
   if (!from || !to?.latitude || !to?.longitude) return null;
   const rad = Math.PI / 180;
@@ -236,7 +246,7 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
   const mapsQuery = encodeURIComponent(`${item.restaurants?.name ?? "Restaurant"} ${item.restaurants?.address ?? ""} ${item.restaurants?.city ?? ""}`);
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}&travelmode=driving`;
   const shareItem = async () => {
-    const url = `${window.location.origin}/items/${item.slug}`;
+    const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
     else await navigator.clipboard.writeText(url);
   };
@@ -307,10 +317,21 @@ const Index = () => {
     const description = selectedItem
       ? `Find ${selectedItem.name} at ${selectedItem.restaurants?.name}. See item ratings, reviews, price, distance, directions, and photos.`
       : `Search specific dishes like pork belly bao taco, fish tacos, or ramen by rating, price, distance, and real menu item reviews.`;
+    const url = selectedItem ? menuItemUrl(selectedItem.slug) : `${window.location.origin}${location.pathname}${location.search}`;
+    const image = selectedItem?.cover_image_url || ramenImage;
     document.title = title.slice(0, 58);
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
-    meta.content = description.slice(0, 155);
+    upsertMeta('meta[name="description"]', { name: "description" }, description.slice(0, 155));
+    upsertMeta('meta[property="og:title"]', { property: "og:title" }, title.slice(0, 88));
+    upsertMeta('meta[property="og:description"]', { property: "og:description" }, description.slice(0, 200));
+    upsertMeta('meta[property="og:type"]', { property: "og:type" }, selectedItem ? "article" : "website");
+    upsertMeta('meta[property="og:url"]', { property: "og:url" }, url);
+    upsertMeta('meta[property="og:image"]', { property: "og:image" }, image.startsWith("http") ? image : `${window.location.origin}${image}`);
+    upsertMeta('meta[name="twitter:card"]', { name: "twitter:card" }, "summary_large_image");
+    upsertMeta('meta[name="twitter:title"]', { name: "twitter:title" }, title.slice(0, 88));
+    upsertMeta('meta[name="twitter:description"]', { name: "twitter:description" }, description.slice(0, 200));
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement("link"); canonical.rel = "canonical"; document.head.appendChild(canonical); }
+    canonical.href = url;
     const ld = document.getElementById("dish-jsonld") ?? document.createElement("script");
     ld.id = "dish-jsonld";
     ld.setAttribute("type", "application/ld+json");
@@ -319,6 +340,8 @@ const Index = () => {
       "@type": "MenuItem",
       name: selectedItem.name,
       description: selectedItem.description,
+      url,
+      image,
       offers: { "@type": "Offer", price: selectedItem.typical_price ?? selectedItem.price_min, priceCurrency: selectedItem.currency },
       aggregateRating: { "@type": "AggregateRating", ratingValue: selectedItem.aggregate_rating, reviewCount: selectedItem.review_count },
       menuAddOn: selectedItem.tags,
@@ -329,7 +352,7 @@ const Index = () => {
       potentialAction: { "@type": "SearchAction", target: `${window.location.origin}/search?q={search_term_string}`, "query-input": "required name=search_term_string" },
     });
     document.head.appendChild(ld);
-  }, [query, selectedItem]);
+  }, [location.pathname, location.search, query, selectedItem]);
 
   const loadItems = async (term = query) => {
     setLoading(true);
@@ -348,6 +371,17 @@ const Index = () => {
   };
 
   useEffect(() => { loadItems(searchParams.get("q") ?? query); }, [searchParams]);
+
+  useEffect(() => {
+    if (!selectedSlug || selectedItem) return;
+    supabase
+      .from("menu_items")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .eq("slug", selectedSlug)
+      .eq("is_published", true)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setItems((current) => [data as unknown as MenuItem, ...current.filter((item) => item.slug !== selectedSlug)]); });
+  }, [selectedItem, selectedSlug]);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -497,11 +531,16 @@ const Index = () => {
 
 const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
+  const shareItem = async () => {
+    const url = menuItemUrl(item.slug);
+    if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
+    else await navigator.clipboard.writeText(url);
+  };
   return (
     <section className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] lg:grid-cols-[1fr_0.85fr]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
-        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={() => navigator.share?.({ title: item.name, url: window.location.href })}><Share2 />Share</Button></div></div>
+        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><Button className="mt-3 w-full" asChild><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.restaurants?.name} ${item.restaurants?.address}`)}`} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button></div></div>
     </section>
