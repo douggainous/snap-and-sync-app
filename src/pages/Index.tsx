@@ -87,6 +87,15 @@ type MenuItemReview = {
   would_order_again?: boolean | null;
   created_at?: string;
 };
+type FavoriteList = {
+  id: string;
+  title: string;
+  description?: string | null;
+  slug: string;
+  is_public: boolean;
+  cover_image_url?: string | null;
+};
+type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -94,6 +103,11 @@ const reviewSchema = z.object({
   price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
   tags: z.string().trim().max(140, "Tags are too long.").optional(),
   would_order_again: z.boolean(),
+});
+const listSchema = z.object({
+  title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
+  description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
+  is_public: z.boolean(),
 });
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
