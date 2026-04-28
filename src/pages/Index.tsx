@@ -553,7 +553,7 @@ const Index = () => {
                 </div>
               </section>
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>
+              {loading ? <SearchResultsLoader /> : <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>}
             </>
           )}
 
