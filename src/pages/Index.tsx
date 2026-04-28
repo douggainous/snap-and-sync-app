@@ -600,7 +600,11 @@ const Index = () => {
         </aside>
 
         <div className="min-w-0 space-y-5">
-          <form onSubmit={submitSearch} className="relative md:hidden"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-12 pl-9 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a dish, not just a restaurant" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button></form>
+          {searchPanelOpen && (
+            <div className="fixed inset-x-0 bottom-[76px] z-40 border-t bg-card p-3 shadow-[var(--shadow-editorial)] md:hidden">
+              <form onSubmit={submitSearch} className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus className="h-12 pl-9 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes, cravings, restaurants" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2" aria-label="Search"><Search className="size-4" /></Button></form>
+            </div>
+          )}
 
           {listSlug && <PublicListPage slug={listSlug} userLocation={userLocation} onSave={setFavoriteTarget} />}
 
