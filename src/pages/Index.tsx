@@ -580,6 +580,30 @@ const Index = () => {
   );
 };
 
+const AccountMenu = ({ sessionUser, onSelectView }: { sessionUser: NonNullable<UserSession>; onSelectView: (view: View) => void }) => {
+  const initial = sessionUser.email?.trim().charAt(0).toUpperCase() || "U";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="rounded-full outline-none ring-offset-background transition hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Open account menu">
+          <Avatar className="size-10 border border-primary/30 shadow-[var(--shadow-soft)]">
+            <AvatarFallback className="bg-gradient-to-br from-accent via-primary to-destructive text-sm font-black text-primary-foreground"><User className="size-4" /><span className="sr-only">{initial}</span></AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate">{sessionUser.email || "Signed in"}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onSelectView("profile")}><User className="mr-2 size-4" />Profile</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelectView("favorites")}><Bookmark className="mr-2 size-4" />Favorites</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelectView("profile")}><MessageSquareText className="mr-2 size-4" />Reviews</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => supabase.auth.signOut()}><LogOut className="mr-2 size-4" />Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
 const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const callUrl = phoneHref(item.restaurants?.phone);
