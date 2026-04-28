@@ -597,11 +597,14 @@ export type Database = {
           created_at: string
           created_by: string | null
           cuisine: string | null
+          email: string | null
           id: string
           latitude: number | null
           longitude: number | null
           name: string
+          phone: string | null
           updated_at: string
+          website_url: string | null
         }
         Insert: {
           address?: string | null
@@ -609,11 +612,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cuisine?: string | null
+          email?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           name: string
+          phone?: string | null
           updated_at?: string
+          website_url?: string | null
         }
         Update: {
           address?: string | null
@@ -621,11 +627,14 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           cuisine?: string | null
+          email?: string | null
           id?: string
           latitude?: number | null
           longitude?: number | null
           name?: string
+          phone?: string | null
           updated_at?: string
+          website_url?: string | null
         }
         Relationships: []
       }

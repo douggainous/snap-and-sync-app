@@ -17,12 +17,15 @@ import {
   MapPin,
   Navigation,
   Plus,
+  Phone,
   Search,
   Share2,
   Sparkles,
   Star,
   Upload,
   User,
+  Globe,
+  Mail,
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
@@ -45,6 +48,9 @@ type Restaurant = {
   cuisine?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  phone?: string | null;
+  website_url?: string | null;
+  email?: string | null;
 };
 type MenuItem = {
   id: string;
@@ -219,6 +225,9 @@ const mapsDirectionsUrl = (restaurant?: Restaurant | null, mode: "driving" | "wa
     : `${restaurant?.name ?? "Restaurant"} ${restaurant?.address ?? ""} ${restaurant?.city ?? ""}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
 };
+const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
+const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
+const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
@@ -388,7 +397,7 @@ const Index = () => {
     const search = term.trim().toLowerCase();
     const { data, error } = await supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
       .eq("is_published", true)
       .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
       .order("aggregate_rating", { ascending: false })
@@ -405,7 +414,7 @@ const Index = () => {
     if (!selectedSlug || selectedItem) return;
     supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
       .eq("slug", selectedSlug)
       .eq("is_published", true)
       .maybeSingle()
@@ -563,6 +572,9 @@ const Index = () => {
 
 const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
+  const callUrl = phoneHref(item.restaurants?.phone);
+  const webUrl = websiteHref(item.restaurants?.website_url);
+  const mailUrl = emailHref(item.restaurants?.email);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
@@ -574,7 +586,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
         <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onSave(item)}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><div className="mt-3 grid gap-2"><Button className="w-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Driving directions</a></Button><Button className="w-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walking directions</a></Button></div></div></div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><div className="mt-3 grid gap-2"><Button className="w-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Driving directions</a></Button><Button className="w-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walking directions</a></Button>{callUrl && <Button className="w-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div></div>
     </section>
   );
 };
@@ -695,7 +707,7 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
   useEffect(() => {
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
       if (!data) return setList(null);
-      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude))").eq("list_id", data.id).order("sort_order");
+      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email))").eq("list_id", data.id).order("sort_order");
       setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
     });
   }, [slug]);
