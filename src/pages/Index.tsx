@@ -85,6 +85,10 @@ type MenuItemReview = {
   currency: string;
   tags: string[];
   would_order_again?: boolean | null;
+  temperature_rating?: number | null;
+  spiciness_rating?: number | null;
+  sweet_savory_rating?: number | null;
+  flavor_intensity_rating?: number | null;
   created_at?: string;
 };
 type FavoriteList = {
@@ -103,6 +107,10 @@ const reviewSchema = z.object({
   price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
   tags: z.string().trim().max(140, "Tags are too long.").optional(),
   would_order_again: z.boolean(),
+  temperature_rating: z.coerce.number().int().min(1).max(5),
+  spiciness_rating: z.coerce.number().int().min(0).max(5),
+  sweet_savory_rating: z.coerce.number().int().min(1).max(5),
+  flavor_intensity_rating: z.coerce.number().int().min(1).max(5),
 });
 const listSchema = z.object({
   title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
@@ -573,20 +581,28 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
 
+const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => <div className="flex gap-1" aria-label="Rating out of 5 stars">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" onClick={() => onChange(star)} className="rounded-md p-1 text-accent transition hover:scale-105" aria-label={`${star} stars`}><Star className={cn("size-8", star <= value && "fill-current")} /></button>)}</div>;
+
+const QuickScale = ({ label, low, high, value, onChange, min = 1 }: { label: string; low: string; high: string; value: number; onChange: (value: number) => void; min?: number }) => <label className="block rounded-md border bg-background p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-sm font-black">{label}</span><span className="rounded-full bg-secondary px-2 py-1 text-xs font-bold">{value}</span></div><input className="w-full accent-primary" type="range" min={min} max="5" step="1" value={value} onChange={(event) => onChange(Number(event.target.value))} /><div className="mt-1 flex justify-between text-xs font-bold text-muted-foreground"><span>{low}</span><span>{high}</span></div></label>;
+
 const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
   const { toast } = useToast();
-  const [rating, setRating] = useState("5");
+  const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
   const [pricePaid, setPricePaid] = useState("");
   const [tags, setTags] = useState("");
   const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
+  const [temperature, setTemperature] = useState(3);
+  const [spiciness, setSpiciness] = useState(0);
+  const [sweetSavory, setSweetSavory] = useState(3);
+  const [flavorIntensity, setFlavorIntensity] = useState(4);
   const [saving, setSaving] = useState(false);
 
   const publishReview = async (event: FormEvent) => {
     event.preventDefault();
     if (!sessionUser) return onProtected("Sign in to submit and publish your menu item review.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Search for a saved menu item before publishing a review.", variant: "destructive" });
-    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain });
+    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain, temperature_rating: temperature, spiciness_rating: spiciness, sweet_savory_rating: sweetSavory, flavor_intensity_rating: flavorIntensity });
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
@@ -601,6 +617,10 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
       currency: item.currency || "USD",
       tags: cleanTags,
       would_order_again: parsed.data.would_order_again,
+      temperature_rating: parsed.data.temperature_rating,
+      spiciness_rating: parsed.data.spiciness_rating,
+      sweet_savory_rating: parsed.data.sweet_savory_rating,
+      flavor_intensity_rating: parsed.data.flavor_intensity_rating,
       is_public: true,
     });
     setSaving(false);
@@ -612,17 +632,17 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     onPublished();
   };
 
-  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Draft your public dish review here. Sign-in happens only when you submit.</p><form onSubmit={publishReview} className="mt-4 space-y-3"><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-bold">Rating<Input type="number" min="1" max="5" step="0.5" value={rating} onChange={(event) => setRating(event.target.value)} required /></label><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`What should people know about the ${item.name}?`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy, great value" /><Button type="submit" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit review</Button></form></section>;
+  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Fast taps first, optional words after. Sign-in happens only when you submit.</p><form onSubmit={publishReview} className="mt-4 space-y-4"><div className="rounded-md border bg-background p-3"><p className="mb-2 text-sm font-black">Overall rating</p><StarRating value={rating} onChange={setRating} /></div><div className="grid gap-3 md:grid-cols-2"><QuickScale label="Temperature" low="cold" high="hot" value={temperature} onChange={setTemperature} /><QuickScale label="Spiciness" low="none" high="fire" value={spiciness} onChange={setSpiciness} min={0} /><QuickScale label="Sweet ↔ savory" low="sweet" high="savory" value={sweetSavory} onChange={setSweetSavory} /><QuickScale label="Flavor intensity" low="subtle" high="bold" value={flavorIntensity} onChange={setFlavorIntensity} /></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`Optional note about the ${item.name}`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Optional tags: crispy, spicy, great value" /><Button type="submit" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit review</Button></form></section>;
 };
 
 const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }) => {
   const [reviews, setReviews] = useState<MenuItemReview[]>([]);
   useEffect(() => {
     if (!isUuid(item.id)) { setReviews([]); return; }
-    supabase.from("menu_item_reviews").select("id,rating,review,price_paid,currency,tags,would_order_again,created_at").eq("menu_item_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []) as MenuItemReview[]));
+    supabase.from("menu_item_reviews").select("id,rating,review,price_paid,currency,tags,would_order_again,temperature_rating,spiciness_rating,sweet_savory_rating,flavor_intensity_rating,created_at").eq("menu_item_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []) as MenuItemReview[]));
   }, [item.id, refreshKey]);
   const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
-  return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold">{review.rating}★ {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<p className="text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
+  return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid grid-cols-2 gap-2 text-xs font-bold text-muted-foreground md:grid-cols-4"><span>Temp {review.temperature_rating ?? "—"}/5</span><span>Spice {review.spiciness_rating ?? "—"}/5</span><span>Sweet↔Savory {review.sweet_savory_rating ?? "—"}/5</span><span>Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div><p className="mt-2 text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
 };
 
 const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
