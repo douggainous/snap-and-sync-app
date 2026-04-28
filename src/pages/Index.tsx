@@ -372,6 +372,17 @@ const Index = () => {
 
   useEffect(() => { loadItems(searchParams.get("q") ?? query); }, [searchParams]);
 
+  useEffect(() => {
+    if (!selectedSlug || selectedItem) return;
+    supabase
+      .from("menu_items")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .eq("slug", selectedSlug)
+      .eq("is_published", true)
+      .maybeSingle()
+      .then(({ data }) => { if (data) setItems((current) => [data as unknown as MenuItem, ...current.filter((item) => item.slug !== selectedSlug)]); });
+  }, [selectedItem, selectedSlug]);
+
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     navigate(`/search?q=${encodeURIComponent(query.trim())}`);
