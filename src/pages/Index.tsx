@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
+import { z } from "zod";
 import {
   Bookmark,
   Camera as CameraIcon,
@@ -76,6 +77,26 @@ type ExtractedMenuItem = {
   rating?: string;
   review?: string;
 };
+type MenuItemReview = {
+  id: string;
+  rating: number;
+  review?: string | null;
+  price_paid?: number | null;
+  currency: string;
+  tags: string[];
+  would_order_again?: boolean | null;
+  created_at?: string;
+};
+
+const reviewSchema = z.object({
+  rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
+  review: z.string().trim().max(1200, "Keep reviews under 1200 characters.").optional(),
+  price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
+  tags: z.string().trim().max(140, "Tags are too long.").optional(),
+  would_order_again: z.boolean(),
+});
+
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const sampleItems: MenuItem[] = [
   {
@@ -270,6 +291,7 @@ const Index = () => {
   const [extracting, setExtracting] = useState(false);
   const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
+  const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
 
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
@@ -450,7 +472,7 @@ const Index = () => {
             </>
           )}
 
-          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} onProtected={requireAuth} />}
+          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
@@ -473,20 +495,72 @@ const Index = () => {
   );
 };
 
-const ItemDetail = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (message: string) => void }) => {
+const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   return (
     <section className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] lg:grid-cols-[1fr_0.85fr]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
-        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => onProtected("Sign in to review this dish.")}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={() => navigator.share?.({ title: item.name, url: window.location.href })}><Share2 />Share</Button></div></div>
+        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={() => navigator.share?.({ title: item.name, url: window.location.href })}><Share2 />Share</Button></div></div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{sampleReviews.map((review) => <div key={review.author} className="border-t pt-3"><p className="font-bold">{review.author} · {review.rating}★</p><p className="text-sm text-muted-foreground">{review.text}</p></div>)}</div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><Button className="mt-3 w-full" asChild><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.restaurants?.name} ${item.restaurants?.address}`)}`} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button></div></div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><Button className="mt-3 w-full" asChild><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.restaurants?.name} ${item.restaurants?.address}`)}`} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button></div></div>
     </section>
   );
 };
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
+
+const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
+  const { toast } = useToast();
+  const [rating, setRating] = useState("5");
+  const [review, setReview] = useState("");
+  const [pricePaid, setPricePaid] = useState("");
+  const [tags, setTags] = useState("");
+  const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const publishReview = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to publish your menu item review publicly.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Search for a saved menu item before publishing a review.", variant: "destructive" });
+    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain });
+    if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
+
+    setSaving(true);
+    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const { error } = await supabase.from("menu_item_reviews").insert({
+      menu_item_id: item.id,
+      restaurant_id: item.restaurants?.id ?? null,
+      user_id: sessionUser.id,
+      rating: parsed.data.rating,
+      review: parsed.data.review || null,
+      price_paid: parsed.data.price_paid ?? null,
+      currency: item.currency || "USD",
+      tags: cleanTags,
+      would_order_again: parsed.data.would_order_again,
+      is_public: true,
+    });
+    setSaving(false);
+    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
+    toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
+    setReview("");
+    setPricePaid("");
+    setTags("");
+    onPublished();
+  };
+
+  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Publish a public review for this dish specifically, not the whole restaurant.</p><form onSubmit={publishReview} className="mt-4 space-y-3"><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-bold">Rating<Input type="number" min="1" max="5" step="0.5" value={rating} onChange={(event) => setRating(event.target.value)} required /></label><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`What should people know about the ${item.name}?`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy, great value" /><Button disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Publish item review</Button></form></section>;
+};
+
+const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }) => {
+  const [reviews, setReviews] = useState<MenuItemReview[]>([]);
+  useEffect(() => {
+    if (!isUuid(item.id)) { setReviews([]); return; }
+    supabase.from("menu_item_reviews").select("id,rating,review,price_paid,currency,tags,would_order_again,created_at").eq("menu_item_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []) as MenuItemReview[]));
+  }, [item.id, refreshKey]);
+  const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
+  return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold">{review.rating}★ {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<p className="text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
+};
 
 const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
   <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
