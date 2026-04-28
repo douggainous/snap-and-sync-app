@@ -227,6 +227,12 @@ const filterDemoItems = (term: string) => {
   return filtered.length ? filtered : sampleItems;
 };
 const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
+const sanitizePostgrestSearch = (value: string) => value
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9\s'&/-]/g, " ")
+  .replace(/\s+/g, " ")
+  .slice(0, 80);
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
 const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
