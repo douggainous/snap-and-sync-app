@@ -190,6 +190,12 @@ const distanceMiles = (from: { latitude: number; longitude: number } | null, to?
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(from.latitude * rad) * Math.cos(to.latitude * rad) * Math.sin(dLon / 2) ** 2;
   return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
+const mapsDirectionsUrl = (restaurant?: Restaurant | null, mode: "driving" | "walking" = "driving") => {
+  const destination = restaurant?.latitude && restaurant?.longitude
+    ? `${restaurant.latitude},${restaurant.longitude}`
+    : `${restaurant?.name ?? "Restaurant"} ${restaurant?.address ?? ""} ${restaurant?.city ?? ""}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
+};
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
@@ -243,8 +249,6 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (action: string) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const mapsQuery = encodeURIComponent(`${item.restaurants?.name ?? "Restaurant"} ${item.restaurants?.address ?? ""} ${item.restaurants?.city ?? ""}`);
-  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}&travelmode=driving`;
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
@@ -271,8 +275,8 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
           </div>
           <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm"><a href={directionsUrl} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
-            <Button asChild variant="outline" size="sm"><a href={directionsUrl.replace("driving", "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
+            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
+            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
             <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
             <Button variant="outline" size="sm" onClick={() => onProtected("Sign in to save this menu item to a shareable favorites list.")}><Bookmark />Favorite</Button>
             <Button size="sm" onClick={() => onProtected("Sign in to review this menu item.")}><Star />Review item</Button>
@@ -542,7 +546,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPubl
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
         <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><Button className="mt-3 w-full" asChild><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.restaurants?.name} ${item.restaurants?.address}`)}`} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button></div></div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><div className="mt-3 grid gap-2"><Button className="w-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Driving directions</a></Button><Button className="w-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walking directions</a></Button></div></div></div>
     </section>
   );
 };
