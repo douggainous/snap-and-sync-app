@@ -285,7 +285,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const ItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -294,36 +294,36 @@ const ItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation
   };
 
   return (
-    <article className="overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-soft)]">
-      <div className="grid gap-0 md:grid-cols-[220px_1fr]">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name}`} className="h-56 w-full object-cover md:h-full" loading="lazy" width={480} height={360} /> : <div className="flex h-56 items-center justify-center bg-secondary text-secondary-foreground md:h-full"><ChefHat className="size-16 opacity-40" /></div>}
-        <div className="space-y-4 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <a href={`/items/${item.slug}`} className="font-display text-3xl font-black leading-none hover:text-accent">{item.name}</a>
-              <p className="mt-2 flex items-center gap-1 text-sm font-bold text-muted-foreground"><MapPin className="size-4" />{item.restaurants?.name} · {item.restaurants?.city ?? "Nearby"}</p>
-            </div>
-            <div className="rounded-full bg-accent px-3 py-1 text-sm font-black text-accent-foreground"><Star className="mr-1 inline size-4 fill-current" />{item.aggregate_rating}</div>
-          </div>
-          <p className="text-sm leading-6 text-foreground/80">{item.description}</p>
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            <div className="rounded-md bg-secondary p-2"><p className="font-black">{formatPrice(item)}</p><p className="text-xs text-muted-foreground">confirmed price</p></div>
-            <div className="rounded-md bg-secondary p-2"><p className="font-black">{item.review_count}</p><p className="text-xs text-muted-foreground">item reviews</p></div>
-            <div className="rounded-md bg-secondary p-2"><p className="font-black">{miles ? `${miles.toFixed(1)} mi` : "—"}</p><p className="text-xs text-muted-foreground">from you</p></div>
-          </div>
-          <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
-            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
-            <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
-            <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
-            <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review item</a></Button>
-          </div>
+    <article className="overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-editorial)]">
+      <a href={`/items/${item.slug}`} className="group relative block overflow-hidden bg-secondary">
+        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name}`} className="h-[420px] w-full object-cover transition duration-500 group-hover:scale-105 sm:h-[520px]" loading="lazy" width={960} height={720} /> : <div className="flex h-[420px] w-full items-center justify-center bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 text-secondary-foreground sm:h-[520px]"><ChefHat className="size-24 opacity-50" /></div>}
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
+        <div className="absolute left-4 top-4 rounded-full bg-accent px-4 py-2 text-xl font-black text-accent-foreground shadow-[var(--shadow-soft)]"><Star className="mr-1 inline size-6 fill-current" />{item.aggregate_rating}</div>
+        <div className="absolute bottom-0 left-0 right-0 p-4 text-foreground sm:p-6">
+          <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-black text-accent"><MapPin className="size-3" />{item.restaurants?.name} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</p>
+          <h2 className="font-display text-4xl font-black leading-none sm:text-6xl">{item.name}</h2>
+          <p className="mt-3 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/85 sm:text-base">{item.description}</p>
+        </div>
+      </a>
+      <div className="space-y-4 p-4 sm:p-5">
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div className="rounded-md bg-secondary p-3"><p className="font-black">{formatPrice(item)}</p><p className="text-xs text-muted-foreground">price</p></div>
+          <div className="rounded-md bg-secondary p-3"><p className="font-black">{item.review_count}</p><p className="text-xs text-muted-foreground">reviews</p></div>
+          <div className="rounded-md bg-secondary p-3"><p className="font-black">{item.photo_count}</p><p className="text-xs text-muted-foreground">photos</p></div>
+        </div>
+        <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button>
+          <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
+          <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
+          <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
         </div>
       </div>
     </article>
   );
 };
+
+const ItemCard = FeedItemCard;
 
 const Index = () => {
   const { toast } = useToast();
@@ -528,18 +528,15 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              <section className="relative overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)]">
-                <img src={ramenImage} alt="Restaurant dish discovery search" className="absolute inset-0 h-full w-full object-cover" width={1024} height={768} />
-                <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/20" />
-                <div className="relative max-w-3xl p-5 md:p-10">
-                  <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-black text-accent-foreground"><Sparkles className="size-4" /> SEO-first dish discovery</p>
-                  <h1 className="font-display text-5xl font-black leading-none md:text-7xl">Find the best food by menu item.</h1>
-                  <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">Search for a dish like “pork belly bao taco” and compare ratings, prices, distance, directions, photos, and item-specific reviews.</p>
-                  <form onSubmit={submitSearch} className="mt-5 flex flex-col gap-2 sm:flex-row"><Input className="h-12 bg-card" value={query} onChange={(event) => setQuery(event.target.value)} /><Button className="h-12"><Search />Search dishes</Button></form>
+              <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
+                <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-black text-accent-foreground"><Sparkles className="size-4" /> Discovery feed</p>
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div><h1 className="font-display text-4xl font-black leading-none md:text-6xl">Scroll until something looks good.</h1><p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">Large food photos, clear ratings, and quick actions for dishes near you.</p></div>
+                  <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2 md:max-w-md"><Input className="h-12 bg-background" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cravings…" /><Button className="h-12"><Search />Search</Button></form>
                 </div>
               </section>
-              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>}
+              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>}
             </>
           )}
 
