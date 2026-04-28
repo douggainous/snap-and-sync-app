@@ -602,7 +602,7 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     event.preventDefault();
     if (!sessionUser) return onProtected("Sign in to submit and publish your menu item review.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Search for a saved menu item before publishing a review.", variant: "destructive" });
-    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain });
+    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain, temperature_rating: temperature, spiciness_rating: spiciness, sweet_savory_rating: sweetSavory, flavor_intensity_rating: flavorIntensity });
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
@@ -617,6 +617,10 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
       currency: item.currency || "USD",
       tags: cleanTags,
       would_order_again: parsed.data.would_order_again,
+      temperature_rating: parsed.data.temperature_rating,
+      spiciness_rating: parsed.data.spiciness_rating,
+      sweet_savory_rating: parsed.data.sweet_savory_rating,
+      flavor_intensity_rating: parsed.data.flavor_intensity_rating,
       is_public: true,
     });
     setSaving(false);
@@ -628,7 +632,7 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     onPublished();
   };
 
-  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Draft your public dish review here. Sign-in happens only when you submit.</p><form onSubmit={publishReview} className="mt-4 space-y-3"><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-bold">Rating<Input type="number" min="1" max="5" step="0.5" value={rating} onChange={(event) => setRating(event.target.value)} required /></label><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`What should people know about the ${item.name}?`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy, great value" /><Button type="submit" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit review</Button></form></section>;
+  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Fast taps first, optional words after. Sign-in happens only when you submit.</p><form onSubmit={publishReview} className="mt-4 space-y-4"><div className="rounded-md border bg-background p-3"><p className="mb-2 text-sm font-black">Overall rating</p><StarRating value={rating} onChange={setRating} /></div><div className="grid gap-3 md:grid-cols-2"><QuickScale label="Temperature" low="cold" high="hot" value={temperature} onChange={setTemperature} /><QuickScale label="Spiciness" low="none" high="fire" value={spiciness} onChange={setSpiciness} min={0} /><QuickScale label="Sweet ↔ savory" low="sweet" high="savory" value={sweetSavory} onChange={setSweetSavory} /><QuickScale label="Flavor intensity" low="subtle" high="bold" value={flavorIntensity} onChange={setFlavorIntensity} /></div><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`Optional note about the ${item.name}`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Optional tags: crispy, spicy, great value" /><Button type="submit" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit review</Button></form></section>;
 };
 
 const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }) => {
