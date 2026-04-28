@@ -225,6 +225,9 @@ const mapsDirectionsUrl = (restaurant?: Restaurant | null, mode: "driving" | "wa
     : `${restaurant?.name ?? "Restaurant"} ${restaurant?.address ?? ""} ${restaurant?.city ?? ""}`;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=${mode}`;
 };
+const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
+const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
+const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
