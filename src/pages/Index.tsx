@@ -246,7 +246,7 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
   const mapsQuery = encodeURIComponent(`${item.restaurants?.name ?? "Restaurant"} ${item.restaurants?.address ?? ""} ${item.restaurants?.city ?? ""}`);
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}&travelmode=driving`;
   const shareItem = async () => {
-    const url = `${window.location.origin}/items/${item.slug}`;
+    const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
     else await navigator.clipboard.writeText(url);
   };
