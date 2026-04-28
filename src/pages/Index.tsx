@@ -317,10 +317,21 @@ const Index = () => {
     const description = selectedItem
       ? `Find ${selectedItem.name} at ${selectedItem.restaurants?.name}. See item ratings, reviews, price, distance, directions, and photos.`
       : `Search specific dishes like pork belly bao taco, fish tacos, or ramen by rating, price, distance, and real menu item reviews.`;
+    const url = selectedItem ? menuItemUrl(selectedItem.slug) : `${window.location.origin}${location.pathname}${location.search}`;
+    const image = selectedItem?.cover_image_url || ramenImage;
     document.title = title.slice(0, 58);
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
-    meta.content = description.slice(0, 155);
+    upsertMeta('meta[name="description"]', { name: "description" }, description.slice(0, 155));
+    upsertMeta('meta[property="og:title"]', { property: "og:title" }, title.slice(0, 88));
+    upsertMeta('meta[property="og:description"]', { property: "og:description" }, description.slice(0, 200));
+    upsertMeta('meta[property="og:type"]', { property: "og:type" }, selectedItem ? "article" : "website");
+    upsertMeta('meta[property="og:url"]', { property: "og:url" }, url);
+    upsertMeta('meta[property="og:image"]', { property: "og:image" }, image.startsWith("http") ? image : `${window.location.origin}${image}`);
+    upsertMeta('meta[name="twitter:card"]', { name: "twitter:card" }, "summary_large_image");
+    upsertMeta('meta[name="twitter:title"]', { name: "twitter:title" }, title.slice(0, 88));
+    upsertMeta('meta[name="twitter:description"]', { name: "twitter:description" }, description.slice(0, 200));
+    let canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!canonical) { canonical = document.createElement("link"); canonical.rel = "canonical"; document.head.appendChild(canonical); }
+    canonical.href = url;
     const ld = document.getElementById("dish-jsonld") ?? document.createElement("script");
     ld.id = "dish-jsonld";
     ld.setAttribute("type", "application/ld+json");
@@ -329,6 +340,8 @@ const Index = () => {
       "@type": "MenuItem",
       name: selectedItem.name,
       description: selectedItem.description,
+      url,
+      image,
       offers: { "@type": "Offer", price: selectedItem.typical_price ?? selectedItem.price_min, priceCurrency: selectedItem.currency },
       aggregateRating: { "@type": "AggregateRating", ratingValue: selectedItem.aggregate_rating, reviewCount: selectedItem.review_count },
       menuAddOn: selectedItem.tags,
@@ -339,7 +352,7 @@ const Index = () => {
       potentialAction: { "@type": "SearchAction", target: `${window.location.origin}/search?q={search_term_string}`, "query-input": "required name=search_term_string" },
     });
     document.head.appendChild(ld);
-  }, [query, selectedItem]);
+  }, [location.pathname, location.search, query, selectedItem]);
 
   const loadItems = async (term = query) => {
     setLoading(true);
