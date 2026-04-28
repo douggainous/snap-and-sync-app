@@ -510,6 +510,58 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPubl
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
 
+const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
+  const { toast } = useToast();
+  const [rating, setRating] = useState("5");
+  const [review, setReview] = useState("");
+  const [pricePaid, setPricePaid] = useState("");
+  const [tags, setTags] = useState("");
+  const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const publishReview = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to publish your menu item review publicly.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Search for a saved menu item before publishing a review.", variant: "destructive" });
+    const parsed = reviewSchema.safeParse({ rating, review, price_paid: pricePaid, tags, would_order_again: wouldOrderAgain });
+    if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
+
+    setSaving(true);
+    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const { error } = await supabase.from("menu_item_reviews").insert({
+      menu_item_id: item.id,
+      restaurant_id: item.restaurants?.id ?? null,
+      user_id: sessionUser.id,
+      rating: parsed.data.rating,
+      review: parsed.data.review || null,
+      price_paid: parsed.data.price_paid ?? null,
+      currency: item.currency || "USD",
+      tags: cleanTags,
+      would_order_again: parsed.data.would_order_again,
+      is_public: true,
+    });
+    setSaving(false);
+    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
+    toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
+    setReview("");
+    setPricePaid("");
+    setTags("");
+    onPublished();
+  };
+
+  return <section id="review-menu-item" className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Rate this menu item</h2><p className="mt-1 text-sm text-muted-foreground">Publish a public review for this dish specifically, not the whole restaurant.</p><form onSubmit={publishReview} className="mt-4 space-y-3"><div className="grid gap-3 sm:grid-cols-3"><label className="text-sm font-bold">Rating<Input type="number" min="1" max="5" step="0.5" value={rating} onChange={(event) => setRating(event.target.value)} required /></label><label className="text-sm font-bold">Price paid<Input type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Optional" /></label><label className="flex items-end gap-2 text-sm font-bold"><input type="checkbox" checked={wouldOrderAgain} onChange={(event) => setWouldOrderAgain(event.target.checked)} />Would order again</label></div><Textarea value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`What should people know about the ${item.name}?`} /><Input value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy, great value" /><Button disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Publish item review</Button></form></section>;
+};
+
+const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }) => {
+  const [reviews, setReviews] = useState<MenuItemReview[]>([]);
+  useEffect(() => {
+    if (!isUuid(item.id)) { setReviews([]); return; }
+    supabase.from("menu_item_reviews").select("id,rating,review,price_paid,currency,tags,would_order_again,created_at").eq("menu_item_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []) as MenuItemReview[]));
+  }, [item.id, refreshKey]);
+  const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
+  return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold">{review.rating}★ {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<p className="text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
+};
+
 const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
   <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
 );
