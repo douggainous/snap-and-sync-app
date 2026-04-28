@@ -254,6 +254,7 @@ export type Database = {
         Row: {
           created_at: string
           currency: string
+          flavor_intensity_rating: number | null
           id: string
           image_path: string | null
           image_url: string | null
@@ -263,7 +264,10 @@ export type Database = {
           rating: number
           restaurant_id: string | null
           review: string | null
+          spiciness_rating: number | null
+          sweet_savory_rating: number | null
           tags: string[]
+          temperature_rating: number | null
           updated_at: string
           user_id: string
           would_order_again: boolean | null
@@ -271,6 +275,7 @@ export type Database = {
         Insert: {
           created_at?: string
           currency?: string
+          flavor_intensity_rating?: number | null
           id?: string
           image_path?: string | null
           image_url?: string | null
@@ -280,7 +285,10 @@ export type Database = {
           rating: number
           restaurant_id?: string | null
           review?: string | null
+          spiciness_rating?: number | null
+          sweet_savory_rating?: number | null
           tags?: string[]
+          temperature_rating?: number | null
           updated_at?: string
           user_id: string
           would_order_again?: boolean | null
@@ -288,6 +296,7 @@ export type Database = {
         Update: {
           created_at?: string
           currency?: string
+          flavor_intensity_rating?: number | null
           id?: string
           image_path?: string | null
           image_url?: string | null
@@ -297,7 +306,10 @@ export type Database = {
           rating?: number
           restaurant_id?: string | null
           review?: string | null
+          spiciness_rating?: number | null
+          sweet_savory_rating?: number | null
           tags?: string[]
+          temperature_rating?: number | null
           updated_at?: string
           user_id?: string
           would_order_again?: boolean | null
