@@ -707,7 +707,7 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
   useEffect(() => {
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
       if (!data) return setList(null);
-      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude))").eq("list_id", data.id).order("sort_order");
+      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email))").eq("list_id", data.id).order("sort_order");
       setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
     });
   }, [slug]);
