@@ -249,8 +249,6 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (action: string) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const mapsQuery = encodeURIComponent(`${item.restaurants?.name ?? "Restaurant"} ${item.restaurants?.address ?? ""} ${item.restaurants?.city ?? ""}`);
-  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}&travelmode=driving`;
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
@@ -277,8 +275,8 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
           </div>
           <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
           <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm"><a href={directionsUrl} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
-            <Button asChild variant="outline" size="sm"><a href={directionsUrl.replace("driving", "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
+            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
+            <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
             <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
             <Button variant="outline" size="sm" onClick={() => onProtected("Sign in to save this menu item to a shareable favorites list.")}><Bookmark />Favorite</Button>
             <Button size="sm" onClick={() => onProtected("Sign in to review this menu item.")}><Star />Review item</Button>
