@@ -622,6 +622,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      refresh_menu_item_rating: {
+        Args: { _menu_item_id: string }
+        Returns: undefined
+      }
       slugify: { Args: { value: string }; Returns: string }
     }
     Enums: {
