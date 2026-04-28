@@ -87,6 +87,15 @@ type MenuItemReview = {
   would_order_again?: boolean | null;
   created_at?: string;
 };
+type FavoriteList = {
+  id: string;
+  title: string;
+  description?: string | null;
+  slug: string;
+  is_public: boolean;
+  cover_image_url?: string | null;
+};
+type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -94,6 +103,11 @@ const reviewSchema = z.object({
   price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
   tags: z.string().trim().max(140, "Tags are too long.").optional(),
   would_order_again: z.boolean(),
+});
+const listSchema = z.object({
+  title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
+  description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
+  is_public: z.boolean(),
 });
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -173,6 +187,7 @@ const navItems = [
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
+const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
   let meta = document.querySelector<HTMLMetaElement>(selector);
   if (!meta) {
@@ -247,7 +262,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (action: string) => void }) => {
+const ItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -278,8 +293,8 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
             <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
             <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
             <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
-            <Button variant="outline" size="sm" onClick={() => onProtected("Sign in to save this menu item to a shareable favorites list.")}><Bookmark />Favorite</Button>
-            <Button size="sm" onClick={() => onProtected("Sign in to review this menu item.")}><Star />Review item</Button>
+            <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
+            <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review item</a></Button>
           </div>
         </div>
       </div>
@@ -306,8 +321,10 @@ const Index = () => {
   const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
+  const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
 
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
+  const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
 
   useEffect(() => {
@@ -476,6 +493,7 @@ const Index = () => {
   return (
     <main className="min-h-screen bg-background pb-24 text-foreground md:pb-0">
       {authPrompt && <AuthModal onClose={() => setAuthPrompt(null)} />}
+      {favoriteTarget && <SaveToListModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
@@ -493,7 +511,9 @@ const Index = () => {
         <div className="min-w-0 space-y-5">
           <form onSubmit={submitSearch} className="relative md:hidden"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-12 pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a dish, not just a restaurant" /></form>
 
-          {view === "discover" && !selectedItem && (
+          {listSlug && <PublicListPage slug={listSlug} userLocation={userLocation} onSave={setFavoriteTarget} />}
+
+          {view === "discover" && !selectedItem && !listSlug && (
             <>
               <section className="relative overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)]">
                 <img src={ramenImage} alt="Restaurant dish discovery search" className="absolute inset-0 h-full w-full object-cover" width={1024} height={768} />
@@ -506,11 +526,11 @@ const Index = () => {
                 </div>
               </section>
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onProtected={requireAuth} />)}</div>
+              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>
             </>
           )}
 
-          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
@@ -523,7 +543,7 @@ const Index = () => {
             </section>
           )}
 
-          {view === "favorites" && <ShareableLists onProtected={requireAuth} />}
+          {view === "favorites" && <ShareableLists sessionUser={sessionUser} onProtected={requireAuth} />}
           {view === "profile" && <ProfilePanel sessionUser={sessionUser} onProtected={requireAuth} />}
         </div>
       </section>
@@ -533,7 +553,7 @@ const Index = () => {
   );
 };
 
-const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
+const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -544,7 +564,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onReviewPubl
     <section className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] lg:grid-cols-[1fr_0.85fr]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
-        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
+        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onSave(item)}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><div className="mt-3 grid gap-2"><Button className="w-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Driving directions</a></Button><Button className="w-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walking directions</a></Button></div></div></div>
     </section>
@@ -609,7 +629,69 @@ const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: 
   <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
 );
 
-const ShareableLists = ({ onProtected }: { onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Build SEO-friendly trails like “Best pork belly dishes in Austin” or “Top fish tacos near me”.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{["Best pork belly bites", "NYC ramen crawl", "Fish tacos near me"].map((list) => <div key={list} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list}</h2><p className="mt-2 text-sm text-muted-foreground">Public list page with favorite menu items, prices, ratings, and directions.</p><Button className="mt-3" variant="outline" onClick={() => onProtected("Sign in to create and share favorites lists.")}><Plus />Create list</Button></div>)}</div></section>;
+const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
+  const { toast } = useToast();
+  const [lists, setLists] = useState<FavoriteList[]>([]);
+  const [title, setTitle] = useState(`Best ${item.name}`.slice(0, 80));
+  const [description, setDescription] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+  }, [sessionUser]);
+
+  const addToList = async (list: FavoriteList) => {
+    if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
+    const { error } = await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
+    else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
+  };
+
+  const createList = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to create favorites lists.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before creating a list.", variant: "destructive" });
+    const parsed = listSchema.safeParse({ title, description, is_public: isPublic });
+    if (!parsed.success) return toast({ title: "Check your list", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setLoading(true);
+    const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
+    const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
+    if (!error && list) await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    setLoading(false);
+    if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
+    toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
+    onClose();
+  };
+
+  if (!sessionUser) { onProtected("Sign in to save menu items to shareable favorites lists."); onClose(); return null; }
+  return <div className="fixed inset-0 z-50 flex items-end bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="w-full max-w-lg rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Save menu item</p><h2 className="font-display text-3xl font-black">Add {item.name} to a list</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{lists.map((list) => <Button key={list.id} className="w-full justify-between" variant="outline" onClick={() => addToList(list)}><span>{list.title}</span><span className="text-xs">{list.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createList} className="mt-4 space-y-3 border-t pt-4"><Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} placeholder="List title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public shareable list</label><Button disabled={loading} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create list and save item</Button></form></div></div>;
+};
+
+const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
+  const [list, setList] = useState<FavoriteListDetail | null>(null);
+  useEffect(() => {
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
+      if (!data) return setList(null);
+      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude))").eq("list_id", data.id).order("sort_order");
+      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
+    });
+  }, [slug]);
+  if (!list) return <section className="rounded-lg border bg-card p-5"><h1 className="font-display text-4xl font-black">List not found</h1><p className="text-muted-foreground">This favorites list may be private or unavailable.</p></section>;
+  return <section className="space-y-5"><div className="rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><p className="text-sm font-black text-accent">{list.is_public ? "Public food list" : "Private food list"}</p><h1 className="font-display text-5xl font-black leading-none">{list.title}</h1>{list.description && <p className="mt-3 text-muted-foreground">{list.description}</p>}<Button className="mt-4" variant="outline" onClick={() => navigator.share?.({ title: list.title, url: listUrl(list.slug) }) ?? navigator.clipboard.writeText(listUrl(list.slug))}><Share2 />Share list</Button></div><div className="space-y-4">{list.items.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={onSave} />)}</div></section>;
+};
+
+const ShareableLists = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => {
+  const [lists, setLists] = useState<FavoriteList[]>([]);
+  useEffect(() => {
+    if (!sessionUser) return;
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+  }, [sessionUser]);
+  if (!sessionUser) return <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Save individual dishes into public or private lists.</p><Button className="mt-4" onClick={() => onProtected("Sign in to create and share favorites lists.")}><LogIn />Sign in to save lists</Button></section>;
+  return <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Your food lists</h1><p className="mt-2 text-muted-foreground">Public lists can be shared with friends; private lists stay just for you.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{lists.map((list) => <div key={list.id} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list.title}</h2><p className="mt-1 text-xs font-bold text-accent">{list.is_public ? "Public" : "Private"}</p><p className="mt-2 text-sm text-muted-foreground">{list.description || "Saved menu items, prices, ratings, and directions."}</p>{list.is_public && <Button className="mt-3" variant="outline" asChild><a href={`/lists/${list.slug}`}><Share2 />Open share page</a></Button>}</div>)}</div></section>;
+};
 
 const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. Your saved favorites, reviews, lists, and contribution history stay synced.</p> : <><p className="mt-2 text-muted-foreground">Browse, search, take photos, and extract menu items without an account. Sign in only when you want to save something.</p><Button className="mt-4" onClick={() => onProtected("Sign in to save favorites, reviews, lists, and contribution history.")}><LogIn />Sign in</Button></>}</section>;
 
