@@ -14,6 +14,84 @@ export type Database = {
   }
   public: {
     Tables: {
+      favorite_list_items: {
+        Row: {
+          created_at: string
+          id: string
+          list_id: string
+          menu_item_id: string
+          note: string | null
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          list_id: string
+          menu_item_id: string
+          note?: string | null
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          list_id?: string
+          menu_item_id?: string
+          note?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorite_list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "favorite_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorite_list_items_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      favorite_lists: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_public: boolean
+          slug: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          slug: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       follows: {
         Row: {
           created_at: string
@@ -111,6 +189,256 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "food_posts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_extractions: {
+        Row: {
+          confirmed_items: Json
+          created_at: string
+          extracted_items: Json
+          id: string
+          menu_photo_id: string | null
+          raw_ocr_text: string | null
+          restaurant_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_items?: Json
+          created_at?: string
+          extracted_items?: Json
+          id?: string
+          menu_photo_id?: string | null
+          raw_ocr_text?: string | null
+          restaurant_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confirmed_items?: Json
+          created_at?: string
+          extracted_items?: Json
+          id?: string
+          menu_photo_id?: string | null
+          raw_ocr_text?: string | null
+          restaurant_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_extractions_menu_photo_id_fkey"
+            columns: ["menu_photo_id"]
+            isOneToOne: false
+            referencedRelation: "menu_photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_extractions_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_item_reviews: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          image_path: string | null
+          image_url: string | null
+          is_public: boolean
+          menu_item_id: string
+          price_paid: number | null
+          rating: number
+          restaurant_id: string | null
+          review: string | null
+          tags: string[]
+          updated_at: string
+          user_id: string
+          would_order_again: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          currency?: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          is_public?: boolean
+          menu_item_id: string
+          price_paid?: number | null
+          rating: number
+          restaurant_id?: string | null
+          review?: string | null
+          tags?: string[]
+          updated_at?: string
+          user_id: string
+          would_order_again?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          image_path?: string | null
+          image_url?: string | null
+          is_public?: boolean
+          menu_item_id?: string
+          price_paid?: number | null
+          rating?: number
+          restaurant_id?: string | null
+          review?: string | null
+          tags?: string[]
+          updated_at?: string
+          user_id?: string
+          would_order_again?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_item_reviews_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "menu_item_reviews_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_items: {
+        Row: {
+          aggregate_rating: number
+          cover_image_url: string | null
+          created_at: string
+          created_by: string | null
+          cuisine: string | null
+          currency: string
+          description: string | null
+          dietary_tags: string[]
+          id: string
+          is_published: boolean
+          name: string
+          normalized_name: string
+          photo_count: number
+          price_max: number | null
+          price_min: number | null
+          restaurant_id: string | null
+          review_count: number
+          section: string | null
+          slug: string
+          tags: string[]
+          typical_price: number | null
+          updated_at: string
+        }
+        Insert: {
+          aggregate_rating?: number
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          currency?: string
+          description?: string | null
+          dietary_tags?: string[]
+          id?: string
+          is_published?: boolean
+          name: string
+          normalized_name: string
+          photo_count?: number
+          price_max?: number | null
+          price_min?: number | null
+          restaurant_id?: string | null
+          review_count?: number
+          section?: string | null
+          slug: string
+          tags?: string[]
+          typical_price?: number | null
+          updated_at?: string
+        }
+        Update: {
+          aggregate_rating?: number
+          cover_image_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          currency?: string
+          description?: string | null
+          dietary_tags?: string[]
+          id?: string
+          is_published?: boolean
+          name?: string
+          normalized_name?: string
+          photo_count?: number
+          price_max?: number | null
+          price_min?: number | null
+          restaurant_id?: string | null
+          review_count?: number
+          section?: string | null
+          slug?: string
+          tags?: string[]
+          typical_price?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_items_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      menu_photos: {
+        Row: {
+          created_at: string
+          id: string
+          image_path: string
+          image_url: string | null
+          ocr_text: string | null
+          restaurant_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          image_path: string
+          image_url?: string | null
+          ocr_text?: string | null
+          restaurant_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          image_path?: string
+          image_url?: string | null
+          ocr_text?: string | null
+          restaurant_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "menu_photos_restaurant_id_fkey"
             columns: ["restaurant_id"]
             isOneToOne: false
             referencedRelation: "restaurants"
@@ -294,7 +622,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      slugify: { Args: { value: string }; Returns: string }
     }
     Enums: {
       post_visibility: "public" | "followers" | "private"
