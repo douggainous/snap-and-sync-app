@@ -85,6 +85,10 @@ type MenuItemReview = {
   currency: string;
   tags: string[];
   would_order_again?: boolean | null;
+  temperature_rating?: number | null;
+  spiciness_rating?: number | null;
+  sweet_savory_rating?: number | null;
+  flavor_intensity_rating?: number | null;
   created_at?: string;
 };
 type FavoriteList = {
@@ -103,6 +107,10 @@ const reviewSchema = z.object({
   price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
   tags: z.string().trim().max(140, "Tags are too long.").optional(),
   would_order_again: z.boolean(),
+  temperature_rating: z.coerce.number().int().min(1).max(5),
+  spiciness_rating: z.coerce.number().int().min(0).max(5),
+  sweet_savory_rating: z.coerce.number().int().min(1).max(5),
+  flavor_intensity_rating: z.coerce.number().int().min(1).max(5),
 });
 const listSchema = z.object({
   title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
