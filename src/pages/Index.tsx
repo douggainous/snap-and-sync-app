@@ -302,7 +302,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave, onFirstReview }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -330,7 +330,7 @@ const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLoca
         </div>
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />{item.review_count > 0 ? "Review" : "Be first to review this!"}</a></Button>
+          {item.review_count > 0 ? <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" onClick={() => onFirstReview?.(item)}><Star />Be first to review this!</Button>}
           <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
@@ -506,6 +506,14 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
+  const startFirstReview = (item: MenuItem) => {
+    setScanRestaurant(item.restaurants?.name ?? "");
+    setScanDish(item.name);
+    setView("scan");
+    navigate("/");
+    requestAnimationFrame(() => document.getElementById("photo-review-form")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   const addReviewPhotos = (files: File[], previews: string[]) => {
     setImageFiles((current) => [...current, ...files].slice(0, 6));
     setPhotoPreviews((current) => [...current, ...previews].slice(0, 6));
@@ -599,7 +607,7 @@ const Index = () => {
               </section>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
