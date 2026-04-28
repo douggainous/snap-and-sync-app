@@ -493,6 +493,7 @@ const Index = () => {
   return (
     <main className="min-h-screen bg-background pb-24 text-foreground md:pb-0">
       {authPrompt && <AuthModal onClose={() => setAuthPrompt(null)} />}
+      {favoriteTarget && <SaveToListModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
@@ -510,7 +511,9 @@ const Index = () => {
         <div className="min-w-0 space-y-5">
           <form onSubmit={submitSearch} className="relative md:hidden"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-12 pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a dish, not just a restaurant" /></form>
 
-          {view === "discover" && !selectedItem && (
+          {listSlug && <PublicListPage slug={listSlug} userLocation={userLocation} onSave={setFavoriteTarget} />}
+
+          {view === "discover" && !selectedItem && !listSlug && (
             <>
               <section className="relative overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)]">
                 <img src={ramenImage} alt="Restaurant dish discovery search" className="absolute inset-0 h-full w-full object-cover" width={1024} height={768} />
@@ -523,11 +526,11 @@ const Index = () => {
                 </div>
               </section>
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onProtected={requireAuth} />)}</div>
+              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>
             </>
           )}
 
-          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
