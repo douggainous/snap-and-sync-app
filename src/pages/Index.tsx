@@ -397,7 +397,7 @@ const Index = () => {
     const search = term.trim().toLowerCase();
     const { data, error } = await supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
       .eq("is_published", true)
       .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
       .order("aggregate_rating", { ascending: false })
@@ -414,7 +414,7 @@ const Index = () => {
     if (!selectedSlug || selectedItem) return;
     supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
       .eq("slug", selectedSlug)
       .eq("is_published", true)
       .maybeSingle()
