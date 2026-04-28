@@ -294,10 +294,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      can_view_food_post: {
-        Args: { _post_id: string; _viewer_id: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       post_visibility: "public" | "followers" | "private"
