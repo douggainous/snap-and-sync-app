@@ -321,8 +321,10 @@ const Index = () => {
   const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
+  const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
 
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
+  const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
 
   useEffect(() => {
