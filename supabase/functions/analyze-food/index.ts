@@ -96,6 +96,6 @@ serve(async (req) => {
     return json({ result: JSON.parse(toolArgs) });
   } catch (error) {
     console.error("analyze-food error", error);
-    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+    return json({ error: "Unexpected error." }, 500);
   }
 });
