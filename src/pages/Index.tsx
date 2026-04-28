@@ -581,13 +581,21 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
 
+const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => <div className="flex gap-1" aria-label="Rating out of 5 stars">{[1, 2, 3, 4, 5].map((star) => <button key={star} type="button" onClick={() => onChange(star)} className="rounded-md p-1 text-accent transition hover:scale-105" aria-label={`${star} stars`}><Star className={cn("size-8", star <= value && "fill-current")} /></button>)}</div>;
+
+const QuickScale = ({ label, low, high, value, onChange, min = 1 }: { label: string; low: string; high: string; value: number; onChange: (value: number) => void; min?: number }) => <label className="block rounded-md border bg-background p-3"><div className="mb-2 flex items-center justify-between gap-3"><span className="text-sm font-black">{label}</span><span className="rounded-full bg-secondary px-2 py-1 text-xs font-bold">{value}</span></div><input className="w-full accent-primary" type="range" min={min} max="5" step="1" value={value} onChange={(event) => onChange(Number(event.target.value))} /><div className="mt-1 flex justify-between text-xs font-bold text-muted-foreground"><span>{low}</span><span>{high}</span></div></label>;
+
 const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void; onPublished: () => void }) => {
   const { toast } = useToast();
-  const [rating, setRating] = useState("5");
+  const [rating, setRating] = useState(5);
   const [review, setReview] = useState("");
   const [pricePaid, setPricePaid] = useState("");
   const [tags, setTags] = useState("");
   const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
+  const [temperature, setTemperature] = useState(3);
+  const [spiciness, setSpiciness] = useState(0);
+  const [sweetSavory, setSweetSavory] = useState(3);
+  const [flavorIntensity, setFlavorIntensity] = useState(4);
   const [saving, setSaving] = useState(false);
 
   const publishReview = async (event: FormEvent) => {
