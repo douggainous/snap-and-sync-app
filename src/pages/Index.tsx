@@ -323,7 +323,8 @@ const Index = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const [sessionUser, setSessionUser] = useState<UserSession>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -436,34 +437,37 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
-  const chooseFile = (event: ChangeEvent<HTMLInputElement>) => {
+  const addReviewPhotos = (files: File[], previews: string[]) => {
+    setImageFiles((current) => [...current, ...files].slice(0, 6));
+    setPhotoPreviews((current) => [...current, ...previews].slice(0, 6));
+  };
+
+  const chooseReviewPhotos = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
     if (!files.length) return;
-    setImageFiles((current) => [...current, ...files].slice(0, 6));
-    setPhotoPreviews((current) => [...current, ...files.map((file) => URL.createObjectURL(file))].slice(0, 6));
+    addReviewPhotos(files, files.map((file) => URL.createObjectURL(file)));
     event.target.value = "";
   };
 
-  const captureNative = async () => {
+  const captureReviewPhoto = async () => {
+    if (!Capacitor.isNativePlatform()) return cameraInputRef.current?.click();
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
       if (!photo.webPath) return;
       const file = await blobUrlToFile(photo.webPath, `food-review-${Date.now()}.jpg`);
-      setImageFiles((current) => [...current, file].slice(0, 6));
-      setPhotoPreviews((current) => [...current, photo.webPath].slice(0, 6));
+      addReviewPhotos([file], [photo.webPath]);
     } catch {
       toast({ title: "Camera unavailable", description: "Select photos instead.", variant: "destructive" });
     }
   };
 
   const selectPhotos = async () => {
-    if (!Capacitor.isNativePlatform()) return fileRef.current?.click();
+    if (!Capacitor.isNativePlatform()) return photoLibraryInputRef.current?.click();
     try {
       const result = await Camera.pickImages({ quality: 85, limit: 6 });
       const photos = result.photos.filter((photo) => photo.webPath);
       const files = await Promise.all(photos.map((photo, index) => blobUrlToFile(photo.webPath!, `food-review-${Date.now()}-${index}.jpg`)));
-      setImageFiles((current) => [...current, ...files].slice(0, 6));
-      setPhotoPreviews((current) => [...current, ...photos.map((photo) => photo.webPath!)].slice(0, 6));
+      addReviewPhotos(files, photos.map((photo) => photo.webPath!));
     } catch {
       toast({ title: "Photo library unavailable", description: "Try selecting photos from the browser picker.", variant: "destructive" });
     }
@@ -475,7 +479,7 @@ const Index = () => {
   };
 
   const startPhotoReview = async () => {
-    if (!imageFiles.length) return toast({ title: "Add a food photo first", description: "Take or upload at least one dish photo to start a review.", variant: "destructive" });
+    if (!imageFiles.length) return toast({ title: "Add a food photo first", description: "Take or select at least one dish photo to start a review.", variant: "destructive" });
     const nextQuery = scanDish.trim() || scanRestaurant.trim() || query;
     setQuery(nextQuery);
     setView("discover");
@@ -536,9 +540,10 @@ const Index = () => {
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
               <div className="mb-4"><h1 className="font-display text-4xl font-black">Start a food review</h1><p className="text-sm text-muted-foreground">Take one or more photos of the dish, then find the menu item and post your review.</p></div>
               <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} /><Input placeholder="Dish name" value={scanDish} onChange={(event) => setScanDish(event.target.value)} /></div>
-              <div className="mt-3 overflow-hidden rounded-lg border bg-secondary">{photoPreviews.length ? <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">{photoPreviews.map((photo, index) => <div key={photo} className="relative overflow-hidden rounded-md border bg-background"><img src={photo} alt={`Food review photo ${index + 1}`} className="h-44 w-full object-cover" /><Button type="button" size="icon" variant="secondary" className="absolute right-2 top-2" onClick={() => removeReviewPhoto(index)} aria-label="Remove photo"><X /></Button></div>)}</div> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Take or select food photos</button>}</div>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={chooseFile} />
-              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={selectPhotos}><Upload />Select photos</Button><Button onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
+              <div className="mt-3 overflow-hidden rounded-lg border bg-secondary">{photoPreviews.length ? <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">{photoPreviews.map((photo, index) => <div key={photo} className="relative overflow-hidden rounded-md border bg-background"><img src={photo} alt={`Food review photo ${index + 1}`} className="h-48 w-full object-cover sm:h-44" /><div className="absolute inset-x-2 top-2 flex justify-between gap-2"><span className="rounded-full bg-background/90 px-2 py-1 text-xs font-black text-foreground">{index + 1}/{photoPreviews.length}</span><Button type="button" size="icon" variant="secondary" className="size-8" onClick={() => removeReviewPhoto(index)} aria-label="Remove photo"><X className="size-4" /></Button></div></div>)}</div> : <button onClick={captureReviewPhoto} className="flex h-80 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><span className="flex size-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-soft)]"><CameraIcon className="size-10" /></span><span className="font-bold">Take a food photo</span><span className="text-xs font-semibold">Preview it here before posting</span></button>}</div>
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={chooseReviewPhotos} />
+              <input ref={photoLibraryInputRef} type="file" accept="image/*" multiple className="hidden" onChange={chooseReviewPhotos} />
+              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button className="h-12" onClick={captureReviewPhoto}><CameraIcon />{photoPreviews.length ? "Add photo" : "Take photo"}</Button><Button className="h-12" variant="outline" onClick={selectPhotos}><Upload />Select photos</Button><Button className="h-12" onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
             </section>
           )}
 
