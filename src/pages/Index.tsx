@@ -14,7 +14,9 @@ import {
   Loader2,
   LocateFixed,
   LogIn,
+  LogOut,
   MapPin,
+  MessageSquareText,
   Navigation,
   Plus,
   Phone,
@@ -29,7 +31,16 @@ import {
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -515,7 +526,7 @@ const Index = () => {
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
           <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-4" /></button></form>
-          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
+          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
@@ -566,6 +577,30 @@ const Index = () => {
 
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-card/95 p-2 backdrop-blur md:hidden">{navItems.map((item) => <button key={item.id} onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}</nav>
     </main>
+  );
+};
+
+const AccountMenu = ({ sessionUser, onSelectView }: { sessionUser: NonNullable<UserSession>; onSelectView: (view: View) => void }) => {
+  const initial = sessionUser.email?.trim().charAt(0).toUpperCase() || "U";
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="rounded-full outline-none ring-offset-background transition hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Open account menu">
+          <Avatar className="size-10 border border-primary/30 shadow-[var(--shadow-soft)]">
+            <AvatarFallback className="bg-gradient-to-br from-accent via-primary to-destructive text-sm font-black text-primary-foreground"><User className="size-4" /><span className="sr-only">{initial}</span></AvatarFallback>
+          </Avatar>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate">{sessionUser.email || "Signed in"}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onSelectView("profile")}><User className="mr-2 size-4" />Profile</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelectView("favorites")}><Bookmark className="mr-2 size-4" />Favorites</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onSelectView("profile")}><MessageSquareText className="mr-2 size-4" />Reviews</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => supabase.auth.signOut()}><LogOut className="mr-2 size-4" />Sign out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
