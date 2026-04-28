@@ -82,18 +82,6 @@ type MenuItem = {
   cover_image_url?: string | null;
   restaurants?: Restaurant | null;
 };
-type ExtractedMenuItem = {
-  name: string;
-  description?: string;
-  section?: string;
-  price?: number;
-  currency?: string;
-  tags?: string[];
-  confidence?: number;
-  selected: boolean;
-  rating?: string;
-  review?: string;
-};
 type MenuItemReview = {
   id: string;
   rating: number;
@@ -343,11 +331,10 @@ const Index = () => {
   const [items, setItems] = useState<MenuItem[]>(sampleItems);
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [extracting, setExtracting] = useState(false);
-  const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
+  const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
 
@@ -450,65 +437,38 @@ const Index = () => {
   };
 
   const chooseFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setImageFile(file);
-    setPreview(URL.createObjectURL(file));
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+    setImageFiles((current) => [...current, ...files].slice(0, 6));
+    setPhotoPreviews((current) => [...current, ...files.map((file) => URL.createObjectURL(file))].slice(0, 6));
+    event.target.value = "";
   };
 
   const captureNative = async () => {
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
       if (!photo.webPath) return;
-      const file = await blobUrlToFile(photo.webPath, `menu-${Date.now()}.jpg`);
-      setImageFile(file);
-      setPreview(photo.webPath);
+      const file = await blobUrlToFile(photo.webPath, `food-review-${Date.now()}.jpg`);
+      setImageFiles((current) => [...current, file].slice(0, 6));
+      setPhotoPreviews((current) => [...current, photo.webPath].slice(0, 6));
     } catch {
       toast({ title: "Camera unavailable", description: "Use upload instead.", variant: "destructive" });
     }
   };
 
-  const analyzeMenu = async () => {
-    if (!imageFile) return;
-    setExtracting(true);
-    try {
-      const imageBase64 = await fileToBase64(imageFile);
-      const { data, error } = await supabase.functions.invoke("analyze-food", { body: { imageBase64, mimeType: imageFile.type || "image/jpeg", context: { restaurantName: scanRestaurant } } });
-      if (error) throw error;
-      const rows = ((data.result?.items ?? []) as ExtractedMenuItem[]).map((item) => ({ ...item, selected: true, rating: "", review: "" }));
-      setExtractedItems(rows.length ? rows : [{ name: "Pork Belly Bao Taco", price: 12, currency: "USD", section: "Small plates", tags: ["pork belly", "bao"], confidence: 0.72, selected: true }]);
-      toast({ title: "Menu items extracted", description: "Confirm the dishes and choose which ones to review." });
-    } catch (error) {
-      toast({ title: "Extraction failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
-    } finally {
-      setExtracting(false);
-    }
+  const removeReviewPhoto = (index: number) => {
+    setImageFiles((current) => current.filter((_, photoIndex) => photoIndex !== index));
+    setPhotoPreviews((current) => current.filter((_, photoIndex) => photoIndex !== index));
   };
 
-  const confirmItems = async () => {
-    const selected = extractedItems.filter((item) => item.selected && item.name.trim());
-    if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
-    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items and your contribution history.");
-    const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
-    const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
-    const rows = selected.map((item) => ({
-      restaurant_id: restaurant?.id ?? null,
-      created_by: sessionUser.id,
-      name: item.name.trim(),
-      slug: `${slugify(item.name)}-at-${slugify(restaurantName)}-${Date.now()}`,
-      normalized_name: item.name.trim().toLowerCase(),
-      description: item.description ?? null,
-      section: item.section ?? null,
-      tags: item.tags ?? [],
-      typical_price: item.price ?? null,
-      price_min: item.price ?? null,
-      price_max: item.price ?? null,
-      currency: item.currency ?? "USD",
-      is_published: true,
-    }));
-    const { error } = await supabase.from("menu_items").insert(rows);
-    if (error) toast({ title: "Could not confirm items", description: error.message, variant: "destructive" });
-    else { toast({ title: "Menu items added", description: "They are now searchable by dish name." }); setExtractedItems([]); setPreview(null); setImageFile(null); setView("discover"); await loadItems(query); }
+  const startPhotoReview = async () => {
+    if (!imageFiles.length) return toast({ title: "Add a food photo first", description: "Take or upload at least one dish photo to start a review.", variant: "destructive" });
+    const nextQuery = scanDish.trim() || scanRestaurant.trim() || query;
+    setQuery(nextQuery);
+    setView("discover");
+    navigate(`/search?q=${encodeURIComponent(nextQuery)}`);
+    await loadItems(nextQuery);
+    toast({ title: "Photos ready", description: "Choose the matching dish, then post your review with your ratings." });
   };
 
   const displayedItems = useMemo(() => {
@@ -561,12 +521,11 @@ const Index = () => {
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
-              <div className="mb-4"><h1 className="font-display text-4xl font-black">Scan a menu, confirm dishes</h1><p className="text-sm text-muted-foreground">Crowdsource menu items and prices. The app extracts options, then you choose what to publish and review.</p></div>
-              <Input className="mb-3" placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} />
-              <div className="overflow-hidden rounded-lg border bg-secondary">{preview ? <img src={preview} alt="Menu scan preview" className="h-72 w-full object-cover" /> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Scan or upload a menu photo</button>}</div>
-              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={chooseFile} />
-              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => fileRef.current?.click()}><Upload />Upload</Button><Button onClick={analyzeMenu} disabled={!imageFile || extracting}>{extracting ? <Loader2 className="animate-spin" /> : <Sparkles />}Extract items</Button></div>
-              {extractedItems.length > 0 && <div className="mt-5 space-y-3"><h2 className="font-display text-2xl font-black">Confirm extracted menu items</h2>{extractedItems.map((item, index) => <ExtractionRow key={index} item={item} onChange={(next) => setExtractedItems((rows) => rows.map((row, i) => i === index ? next : row))} />)}<Button className="w-full" onClick={confirmItems}><Plus />Save selected items</Button></div>}
+              <div className="mb-4"><h1 className="font-display text-4xl font-black">Start a food review</h1><p className="text-sm text-muted-foreground">Take one or more photos of the dish, then find the menu item and post your review.</p></div>
+              <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} /><Input placeholder="Dish name" value={scanDish} onChange={(event) => setScanDish(event.target.value)} /></div>
+              <div className="mt-3 overflow-hidden rounded-lg border bg-secondary">{photoPreviews.length ? <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">{photoPreviews.map((photo, index) => <div key={photo} className="relative overflow-hidden rounded-md border bg-background"><img src={photo} alt={`Food review photo ${index + 1}`} className="h-44 w-full object-cover" /><Button type="button" size="icon" variant="secondary" className="absolute right-2 top-2" onClick={() => removeReviewPhoto(index)} aria-label="Remove photo"><X /></Button></div>)}</div> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Take or upload food photos</button>}</div>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={chooseFile} />
+              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => fileRef.current?.click()}><Upload />Upload photos</Button><Button onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
             </section>
           )}
 
@@ -731,10 +690,6 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
   return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid grid-cols-2 gap-2 text-xs font-bold text-muted-foreground md:grid-cols-4"><span>Temp {review.temperature_rating ?? "—"}/5</span><span>Spice {review.spiciness_rating ?? "—"}/5</span><span>Sweet↔Savory {review.sweet_savory_rating ?? "—"}/5</span><span>Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div><p className="mt-2 text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
 };
-
-const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
-  <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
-);
 
 const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
   const { toast } = useToast();
