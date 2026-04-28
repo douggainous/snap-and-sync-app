@@ -438,7 +438,7 @@ const Index = () => {
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    const search = term.trim().toLowerCase();
+    const search = sanitizePostgrestSearch(term);
     const { data, error } = await supabase
       .from("menu_items")
       .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
