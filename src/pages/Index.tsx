@@ -262,7 +262,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (action: string) => void }) => {
+const ItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -293,8 +293,8 @@ const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLoc
             <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
             <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
             <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
-            <Button variant="outline" size="sm" onClick={() => onProtected("Sign in to save this menu item to a shareable favorites list.")}><Bookmark />Favorite</Button>
-            <Button size="sm" onClick={() => onProtected("Sign in to review this menu item.")}><Star />Review item</Button>
+            <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
+            <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review item</a></Button>
           </div>
         </div>
       </div>
