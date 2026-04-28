@@ -62,6 +62,13 @@ type Restaurant = {
   phone?: string | null;
   website_url?: string | null;
   email?: string | null;
+  google_place_id?: string | null;
+  rating?: number | null;
+  review_count?: number | null;
+  price_level?: number | null;
+  business_status?: string | null;
+  maps_url?: string | null;
+  photo_reference?: string | null;
 };
 type MenuItem = {
   id: string;
@@ -314,7 +321,7 @@ const FeedItemCard = ({ item, userLocation, onSave }: { item: MenuItem; userLoca
         </div>
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button>
+          <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />{item.review_count > 0 ? "Review" : "Be first to review this!"}</a></Button>
           <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
@@ -342,6 +349,8 @@ const Index = () => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -410,7 +419,7 @@ const Index = () => {
     const search = term.trim().toLowerCase();
     const { data, error } = await supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
       .eq("is_published", true)
       .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
       .order("aggregate_rating", { ascending: false })
@@ -444,7 +453,7 @@ const Index = () => {
     if (!selectedSlug || selectedItem) return;
     supabase
       .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email)")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
       .eq("slug", selectedSlug)
       .eq("is_published", true)
       .maybeSingle()
@@ -457,8 +466,24 @@ const Index = () => {
     void loadItems(query);
   };
 
+  const loadNearbyRestaurants = async (locationPoint: { latitude: number; longitude: number }) => {
+    setLoadingNearby(true);
+    const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
+    setLoadingNearby(false);
+    if (error || data?.error) {
+      toast({ title: "Google Maps not connected", description: data?.error || error?.message || "Add a Google Maps API key to preload nearby restaurants.", variant: "destructive" });
+      return;
+    }
+    setNearbyRestaurants((data.restaurants ?? []) as Restaurant[]);
+    toast({ title: "Nearby restaurants loaded", description: `Found ${(data.restaurants ?? []).length} restaurants within 50 miles.` });
+  };
+
   const askLocation = () => navigator.geolocation?.getCurrentPosition(
-    (pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+    (pos) => {
+      const locationPoint = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setUserLocation(locationPoint);
+      void loadNearbyRestaurants(locationPoint);
+    },
     () => toast({ title: "Location unavailable", description: "You can still browse by city and restaurant.", variant: "destructive" }),
     { enableHighAccuracy: true, timeout: 8000 },
   );
@@ -559,6 +584,7 @@ const Index = () => {
                   <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2 md:max-w-md"><Input className="h-12 bg-background" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cravings…" /><Button className="h-12"><Search />Search</Button></form>
                 </div>
               </section>
+              <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
               {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
@@ -626,7 +652,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
     <section className="space-y-5">
       <div className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] lg:grid-cols-[1fr_0.85fr]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
-        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Review this item</Button><Button variant="outline" onClick={() => onSave(item)}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
+        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />{item.review_count > 0 ? "Review this item" : "Be first to review this!"}</Button><Button variant="outline" onClick={() => onSave(item)}><Bookmark />Favorite</Button><Button variant="outline" onClick={shareItem}><Share2 />Share</Button></div></div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><div className="mt-3 grid gap-2"><Button className="w-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Driving directions</a></Button><Button className="w-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walking directions</a></Button>{callUrl && <Button className="w-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div></div>
     </section>
@@ -636,6 +662,13 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
 
 const SearchResultsLoader = () => <div className="space-y-4" aria-label="Loading search results" aria-live="polite">{[0, 1, 2].map((item) => <div key={item} className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-soft)] md:grid-cols-[220px_1fr]"><div className="h-56 animate-pulse bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 md:h-full" /><div className="space-y-4 p-4"><div className="h-4 w-28 animate-pulse rounded-full bg-accent/40" /><div className="h-8 w-2/3 animate-pulse rounded-md bg-primary/25" /><div className="h-4 w-full animate-pulse rounded-md bg-muted" /><div className="h-4 w-4/5 animate-pulse rounded-md bg-muted" /><div className="flex gap-2"><span className="h-9 w-24 animate-pulse rounded-md bg-accent/40" /><span className="h-9 w-24 animate-pulse rounded-md bg-primary/30" /></div></div></div>)}</div>;
+
+
+const RestaurantDirectory = ({ restaurants, loading }: { restaurants: Restaurant[]; loading: boolean }) => {
+  if (loading) return <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><div className="flex items-center gap-2 font-bold text-accent"><Loader2 className="size-4 animate-spin" />Loading Google Maps restaurants within 50 miles…</div></section>;
+  if (!restaurants.length) return null;
+  return <section className="space-y-3 rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><div><h2 className="font-display text-3xl font-black">Nearby restaurants from Google Maps</h2><p className="text-sm text-muted-foreground">Places within 50 miles of your location. Add the first dish review when something looks good.</p></div><div className="grid gap-3 md:grid-cols-2">{restaurants.map((restaurant) => <article key={restaurant.google_place_id ?? restaurant.id ?? restaurant.name} className="rounded-md border bg-background p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-display text-xl font-black">{restaurant.name}</h3><p className="mt-1 text-sm text-muted-foreground">{restaurant.address || restaurant.city || "Nearby"}</p></div>{restaurant.rating ? <span className="rounded-full bg-accent px-3 py-1 text-sm font-black text-accent-foreground"><Star className="mr-1 inline size-4 fill-current" />{restaurant.rating}</span> : null}</div><div className="mt-3 flex flex-wrap gap-2"><Button size="sm" asChild><a href={`/search?q=${encodeURIComponent(restaurant.name)}`}>Be first to review this!</a></Button>{restaurant.maps_url && <Button size="sm" variant="outline" asChild><a href={restaurant.maps_url} target="_blank" rel="noreferrer"><Navigation />Maps</a></Button>}{restaurant.website_url && <Button size="sm" variant="outline" asChild><a href={restaurant.website_url} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}</div></article>)}</div></section>;
+};
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => {
   const chooseRating = (star: number, event: MouseEvent<HTMLButtonElement>) => {
@@ -823,7 +856,7 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
   useEffect(() => {
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
       if (!data) return setList(null);
-      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email))").eq("list_id", data.id).order("sort_order");
+      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference))").eq("list_id", data.id).order("sort_order");
       setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
     });
   }, [slug]);
