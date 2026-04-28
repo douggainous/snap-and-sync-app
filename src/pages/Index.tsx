@@ -352,7 +352,6 @@ const Index = () => {
   };
 
   const captureNative = async () => {
-    if (!sessionUser) return requireAuth("Sign in to scan menus and crowdsource item prices.");
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
       if (!photo.webPath) return;
@@ -365,7 +364,6 @@ const Index = () => {
   };
 
   const analyzeMenu = async () => {
-    if (!sessionUser) return requireAuth("Sign in to scan menus and confirm extracted menu items.");
     if (!imageFile) return;
     setExtracting(true);
     try {
@@ -383,9 +381,9 @@ const Index = () => {
   };
 
   const confirmItems = async () => {
-    if (!sessionUser) return requireAuth("Sign in to confirm menu items.");
     const selected = extractedItems.filter((item) => item.selected && item.name.trim());
     if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
+    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items, reviews, and your contribution history.");
     const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
     const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
     const rows = selected.map((item) => ({
@@ -423,7 +421,7 @@ const Index = () => {
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
           <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /></form>
           <Button variant="outline" onClick={askLocation}><LocateFixed />Near me</Button>
-          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in to review, save, scan menus, and follow reviewers.")}><LogIn />Sign in</Button>}
+          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only to save favorites, reviews, lists, or contribution history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
@@ -458,10 +456,10 @@ const Index = () => {
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
               <div className="mb-4"><h1 className="font-display text-4xl font-black">Scan a menu, confirm dishes</h1><p className="text-sm text-muted-foreground">Crowdsource menu items and prices. The app extracts options, then you choose what to publish and review.</p></div>
               <Input className="mb-3" placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} />
-              <div className="overflow-hidden rounded-lg border bg-secondary">{preview ? <img src={preview} alt="Menu scan preview" className="h-72 w-full object-cover" /> : <button onClick={() => sessionUser ? fileRef.current?.click() : requireAuth("Sign in to scan menus and add item prices.")} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Scan or upload a menu photo</button>}</div>
+              <div className="overflow-hidden rounded-lg border bg-secondary">{preview ? <img src={preview} alt="Menu scan preview" className="h-72 w-full object-cover" /> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Scan or upload a menu photo</button>}</div>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={chooseFile} />
-              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : sessionUser ? fileRef.current?.click() : requireAuth("Sign in to scan menus.")}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => sessionUser ? fileRef.current?.click() : requireAuth("Sign in to upload menu photos.")}><Upload />Upload</Button><Button onClick={analyzeMenu} disabled={!imageFile || extracting}>{extracting ? <Loader2 className="animate-spin" /> : <Sparkles />}Extract items</Button></div>
-              {extractedItems.length > 0 && <div className="mt-5 space-y-3"><h2 className="font-display text-2xl font-black">Confirm extracted menu items</h2>{extractedItems.map((item, index) => <ExtractionRow key={index} item={item} onChange={(next) => setExtractedItems((rows) => rows.map((row, i) => i === index ? next : row))} />)}<Button className="w-full" onClick={confirmItems}><Plus />Publish selected items</Button></div>}
+              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => fileRef.current?.click()}><Upload />Upload</Button><Button onClick={analyzeMenu} disabled={!imageFile || extracting}>{extracting ? <Loader2 className="animate-spin" /> : <Sparkles />}Extract items</Button></div>
+              {extractedItems.length > 0 && <div className="mt-5 space-y-3"><h2 className="font-display text-2xl font-black">Confirm extracted menu items</h2>{extractedItems.map((item, index) => <ExtractionRow key={index} item={item} onChange={(next) => setExtractedItems((rows) => rows.map((row, i) => i === index ? next : row))} />)}<Button className="w-full" onClick={confirmItems}><Plus />Save selected items</Button></div>}
             </section>
           )}
 
@@ -496,6 +494,6 @@ const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: 
 
 const ShareableLists = ({ onProtected }: { onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Build SEO-friendly trails like “Best pork belly dishes in Austin” or “Top fish tacos near me”.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{["Best pork belly bites", "NYC ramen crawl", "Fish tacos near me"].map((list) => <div key={list} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list}</h2><p className="mt-2 text-sm text-muted-foreground">Public list page with favorite menu items, prices, ratings, and directions.</p><Button className="mt-3" variant="outline" onClick={() => onProtected("Sign in to create and share favorites lists.")}><Plus />Create list</Button></div>)}</div></section>;
 
-const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. You can scan menus, review items, save favorites, and follow reviewers.</p> : <><p className="mt-2 text-muted-foreground">Browsing is free. Sign in only when you want to contribute or save.</p><Button className="mt-4" onClick={() => onProtected("Sign in to review, scan menus, save favorites, and follow reviewers.")}><LogIn />Sign in</Button></>}</section>;
+const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. Your saved favorites, reviews, lists, and contribution history stay synced.</p> : <><p className="mt-2 text-muted-foreground">Browse, search, take photos, and extract menu items without an account. Sign in only when you want to save something.</p><Button className="mt-4" onClick={() => onProtected("Sign in to save favorites, reviews, lists, and contribution history.")}><LogIn />Sign in</Button></>}</section>;
 
 export default Index;

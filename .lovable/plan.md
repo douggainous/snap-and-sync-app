@@ -6,7 +6,7 @@ The app should work like a public search/discovery engine for specific dishes:
 - Users can search “pork belly bao taco”, “fish tacos”, “best birria ramen”, or “crispy duck noodles”.
 - Results show individual menu items with ratings, photos, price, distance, restaurant, reviews, and directions.
 - Accounts are optional for browsing, searching, viewing reviews, opening directions, and sharing public pages.
-- Accounts are required only for write/social actions: reviewing, rating, scanning menus, posting photos, liking, commenting, following, and creating/saving favorites lists.
+- Accounts are required only when storing user-owned data: saving reviews, publishing confirmed menu items, favorites/lists, past scans/history, liking, commenting, and following.
 
 ## SEO-first architecture
 
@@ -77,11 +77,11 @@ Restaurant pages should emphasize food discovery:
 
 ### Scan menu flow
 Replace the current “food post” mental model with:
-1. Scan menu or receipt.
-2. AI/OCR extracts multiple menu items, prices, sections, and descriptions.
-3. User confirms/edit extracted items.
+1. Scan menu or receipt as a guest.
+2. AI/OCR extracts multiple menu items, prices, sections, and descriptions without requiring login.
+3. User confirms/edit extracted items locally.
 4. User chooses which items to review.
-5. Confirmed menu items become searchable public catalog entries.
+5. Prompt for sign-in only when saving reviews, publishing confirmed menu items, or preserving scan history.
 
 ### Item review flow
 Users review individual menu items:
@@ -117,9 +117,10 @@ Lists should support:
 - View ratings, reviews, photos, and prices.
 - Use distance/directions.
 - Share public pages.
+- Take or upload menu photos.
+- Extract and edit menu items before deciding whether to save.
 
 ### Signed-in users can
-- Scan menus.
 - Confirm extracted menu items.
 - Rate/review items.
 - Upload photos.
