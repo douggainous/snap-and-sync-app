@@ -129,6 +129,7 @@ const photoReviewSchema = reviewSchema.extend({
 });
 
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const DISCOVERY_PAGE_SIZE = 10;
 
 const sampleItems: MenuItem[] = [
   {
@@ -332,12 +333,15 @@ const Index = () => {
   const [searchParams] = useSearchParams();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [sessionUser, setSessionUser] = useState<UserSession>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
   const [query, setQuery] = useState(searchParams.get("q") ?? "pork belly bao taco");
   const [items, setItems] = useState<MenuItem[]>(sampleItems);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreItems, setHasMoreItems] = useState(true);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -398,8 +402,11 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (term = query) => {
-    setLoading(true);
+  const loadItems = async (term = query, append = false) => {
+    const offset = append ? items.length : 0;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+
     const search = term.trim().toLowerCase();
     const { data, error } = await supabase
       .from("menu_items")
@@ -408,13 +415,30 @@ const Index = () => {
       .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
       .order("aggregate_rating", { ascending: false })
       .order("review_count", { ascending: false })
-      .limit(40);
-    if (!error && data?.length) setItems(data as unknown as MenuItem[]);
-    else setItems(sampleItems);
+      .range(offset, offset + DISCOVERY_PAGE_SIZE - 1);
+
+    const rows = !error && data?.length ? data as unknown as MenuItem[] : [];
+    setHasMoreItems(rows.length === DISCOVERY_PAGE_SIZE);
+    if (append) {
+      setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
+    } else {
+      setItems(rows.length ? rows : sampleItems);
+    }
     setLoading(false);
+    setLoadingMore(false);
   };
 
   useEffect(() => { loadItems(searchParams.get("q") ?? query); }, [searchParams]);
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || view !== "discover" || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) void loadItems(query, true);
+    }, { rootMargin: "700px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length]);
 
   useEffect(() => {
     if (!selectedSlug || selectedItem) return;
@@ -536,7 +560,7 @@ const Index = () => {
                 </div>
               </section>
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>}
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
