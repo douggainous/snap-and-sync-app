@@ -553,7 +553,7 @@ const Index = () => {
                 </div>
               </section>
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>
+              {loading ? <SearchResultsLoader /> : <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} />)}</div>}
             </>
           )}
 
@@ -626,6 +626,8 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
 };
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
+
+const SearchResultsLoader = () => <div className="space-y-4" aria-label="Loading search results" aria-live="polite">{[0, 1, 2].map((item) => <div key={item} className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-soft)] md:grid-cols-[220px_1fr]"><div className="h-56 animate-pulse bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 md:h-full" /><div className="space-y-4 p-4"><div className="h-4 w-28 animate-pulse rounded-full bg-accent/40" /><div className="h-8 w-2/3 animate-pulse rounded-md bg-primary/25" /><div className="h-4 w-full animate-pulse rounded-md bg-muted" /><div className="h-4 w-4/5 animate-pulse rounded-md bg-muted" /><div className="flex gap-2"><span className="h-9 w-24 animate-pulse rounded-md bg-accent/40" /><span className="h-9 w-24 animate-pulse rounded-md bg-primary/30" /></div></div></div>)}</div>;
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (value: number) => void }) => {
   const chooseRating = (star: number, event: MouseEvent<HTMLButtonElement>) => {
