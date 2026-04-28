@@ -367,6 +367,7 @@ const Index = () => {
   const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const [scanRestaurant, setScanRestaurant] = useState("");
@@ -479,6 +480,7 @@ const Index = () => {
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
+    setSearchPanelOpen(false);
     navigate(`/search?q=${encodeURIComponent(query.trim())}`);
     void loadItems(query);
   };
