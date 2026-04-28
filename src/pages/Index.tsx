@@ -543,7 +543,7 @@ const Index = () => {
             </section>
           )}
 
-          {view === "favorites" && <ShareableLists onProtected={requireAuth} />}
+          {view === "favorites" && <ShareableLists sessionUser={sessionUser} onProtected={requireAuth} />}
           {view === "profile" && <ProfilePanel sessionUser={sessionUser} onProtected={requireAuth} />}
         </div>
       </section>
