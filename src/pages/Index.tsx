@@ -214,6 +214,13 @@ const navItems = [
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
+const filterDemoItems = (term: string) => {
+  const search = term.trim().toLowerCase();
+  if (!search) return sampleItems;
+  const filtered = sampleItems.filter((item) => `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.cuisine ?? ""} ${item.restaurants?.name ?? ""} ${item.restaurants?.city ?? ""}`.toLowerCase().includes(search));
+  return filtered.length ? filtered : sampleItems;
+};
+const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
 const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -346,7 +353,7 @@ const Index = () => {
   const [sessionUser, setSessionUser] = useState<UserSession>(null);
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
-  const [query, setQuery] = useState(searchParams.get("q") ?? "pork belly bao taco");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [items, setItems] = useState<MenuItem[]>(sampleItems);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -428,12 +435,14 @@ const Index = () => {
       .order("review_count", { ascending: false })
       .range(offset, offset + DISCOVERY_PAGE_SIZE - 1);
 
-    const rows = !error && data?.length ? data as unknown as MenuItem[] : [];
-    setHasMoreItems(rows.length === DISCOVERY_PAGE_SIZE);
+    const realRows = !error && data?.length ? data as unknown as MenuItem[] : [];
+    const rows = realRows.length ? realRows : demoPage(term, offset);
+    const demoTotal = filterDemoItems(term).length;
+    setHasMoreItems(realRows.length ? rows.length === DISCOVERY_PAGE_SIZE : offset + rows.length < demoTotal);
     if (append) {
       setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
     } else {
-      setItems(rows.length ? rows : sampleItems);
+      setItems(rows.length ? rows : sampleItems.slice(0, DISCOVERY_PAGE_SIZE));
     }
     setLoading(false);
     setLoadingMore(false);
@@ -473,11 +482,13 @@ const Index = () => {
     const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
     setLoadingNearby(false);
     if (error || data?.error) {
-      toast({ title: "Google Maps not connected", description: data?.error || error?.message || "Add a Google Maps API key to preload nearby restaurants.", variant: "destructive" });
+      setNearbyRestaurants(sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
+      toast({ title: "Demo nearby picks loaded", description: "Using simulated restaurants while Google Maps is unavailable." });
       return;
     }
-    setNearbyRestaurants((data.restaurants ?? []) as Restaurant[]);
-    toast({ title: "Nearby restaurants loaded", description: `Found ${(data.restaurants ?? []).length} restaurants within 50 miles.` });
+    const restaurants = ((data.restaurants ?? []) as Restaurant[]);
+    setNearbyRestaurants(restaurants.length ? restaurants : sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
+    toast({ title: restaurants.length ? "Nearby restaurants loaded" : "Demo nearby picks loaded", description: restaurants.length ? `Found ${restaurants.length} restaurants within 50 miles.` : "Using simulated restaurants for the feed." });
   };
 
   const askLocation = () => navigator.geolocation?.getCurrentPosition(
