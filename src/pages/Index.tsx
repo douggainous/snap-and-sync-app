@@ -1,28 +1,27 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
 import {
   Bookmark,
   Camera as CameraIcon,
   ChefHat,
+  Clock,
   Compass,
-  Eye,
-  EyeOff,
+  Footprints,
   Heart,
-  Home,
   Loader2,
-  LogOut,
+  LocateFixed,
+  LogIn,
   MapPin,
-  MessageCircle,
+  Navigation,
   Plus,
   Search,
-  Send,
   Share2,
   Sparkles,
   Star,
   Upload,
   User,
-  Users,
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
@@ -30,93 +29,142 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import type { Tables } from "@/integrations/supabase/types";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
-type Tab = "feed" | "discover" | "post" | "saved" | "profile";
-type Profile = Tables<"profiles">;
-type FoodPost = Tables<"food_posts">;
-type Comment = Tables<"post_comments">;
-type AppPost = FoodPost & {
-  profiles?: Pick<Profile, "display_name" | "username" | "avatar_url"> | null;
-  post_likes?: { id: string; user_id: string }[];
-  post_saves?: { id: string; user_id: string }[];
-  post_comments?: (Comment & { profiles?: Pick<Profile, "display_name" | "username"> | null })[];
+type View = "discover" | "scan" | "favorites" | "profile";
+type UserSession = { id: string; email?: string } | null;
+type Restaurant = {
+  id?: string;
+  name: string;
+  slug?: string;
+  address?: string | null;
+  city?: string | null;
+  cuisine?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
-
-type Extraction = {
-  restaurantName?: string;
-  dishName?: string;
-  cuisine?: string;
-  foodTags?: string[];
-  dietaryTags?: string[];
-  ingredients?: string[];
+type MenuItem = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  section?: string | null;
+  cuisine?: string | null;
+  tags: string[];
+  dietary_tags: string[];
+  typical_price?: number | null;
+  price_min?: number | null;
+  price_max?: number | null;
+  currency: string;
+  aggregate_rating: number;
+  review_count: number;
+  photo_count: number;
+  cover_image_url?: string | null;
+  restaurants?: Restaurant | null;
+};
+type ExtractedMenuItem = {
+  name: string;
+  description?: string;
+  section?: string;
   price?: number;
-  ocrText?: string;
+  currency?: string;
+  tags?: string[];
   confidence?: number;
-  notes?: string;
+  selected: boolean;
+  rating?: string;
+  review?: string;
 };
 
-const samplePosts = [
+const sampleItems: MenuItem[] = [
   {
-    id: "sample-1",
-    restaurant_name: "Kitsune Counter",
-    dish_name: "Shoyu Ramen",
-    cuisine: "Japanese",
-    rating: 4.8,
-    review: "Deep broth, springy noodles, and a perfect jammy egg. Worth crossing town for.",
-    image_url: ramenImage,
-    ai_tags: ["ramen", "umami", "noodles", "comfort"],
-    dietary_tags: ["contains gluten", "egg"],
-    profiles: { display_name: "Maya Chen", username: "mayatastes", avatar_url: null },
-    likes: 248,
-    comments: 32,
+    id: "sample-pork-belly-bao-taco",
+    name: "Pork Belly Bao Taco",
+    slug: "pork-belly-bao-taco-at-luna-kitchen",
+    description: "Crispy pork belly tucked into a soft bao-style shell with pickled cucumber, scallion, and chili crunch.",
+    section: "Small plates",
+    cuisine: "Asian fusion",
+    tags: ["pork belly", "bao", "taco", "crispy", "spicy"],
+    dietary_tags: ["contains gluten"],
+    typical_price: 12,
+    price_min: 11,
+    price_max: 14,
+    currency: "USD",
+    aggregate_rating: 4.8,
+    review_count: 186,
+    photo_count: 42,
+    cover_image_url: ramenImage,
+    restaurants: { name: "Luna Kitchen", address: "214 Market St", city: "Austin", cuisine: "Asian fusion", latitude: 30.265, longitude: -97.747 },
   },
   {
-    id: "sample-2",
-    restaurant_name: "Naranja Social",
-    dish_name: "Charred Octopus Tostada",
+    id: "sample-fish-tacos",
+    name: "Baja Fish Tacos",
+    slug: "baja-fish-tacos-at-naranja-social",
+    description: "Beer-battered cod, shaved cabbage, lime crema, and habanero salsa on handmade corn tortillas.",
+    section: "Tacos",
     cuisine: "Mexican",
-    rating: 4.6,
-    review: "Smoky edges, citrus heat, and a crispy blue corn base. Best shared with friends.",
-    image_url: null,
-    ai_tags: ["seafood", "citrus", "spicy"],
+    tags: ["fish tacos", "crispy", "lime", "value"],
     dietary_tags: ["pescatarian"],
-    profiles: { display_name: "Leo Park", username: "forktrail", avatar_url: null },
-    likes: 121,
-    comments: 18,
+    typical_price: 15,
+    price_min: 14,
+    price_max: 16,
+    currency: "USD",
+    aggregate_rating: 4.7,
+    review_count: 243,
+    photo_count: 67,
+    cover_image_url: null,
+    restaurants: { name: "Naranja Social", address: "88 East 6th St", city: "Austin", cuisine: "Mexican", latitude: 30.267, longitude: -97.739 },
   },
+  {
+    id: "sample-duck-noodles",
+    name: "Crispy Duck Garlic Noodles",
+    slug: "crispy-duck-garlic-noodles-at-kitsune-counter",
+    description: "Wok-tossed noodles with confit duck, black garlic, bok choy, and toasted sesame.",
+    section: "Noodles",
+    cuisine: "Japanese",
+    tags: ["duck", "noodles", "garlic", "umami"],
+    dietary_tags: ["contains gluten"],
+    typical_price: 22,
+    price_min: 21,
+    price_max: 24,
+    currency: "USD",
+    aggregate_rating: 4.6,
+    review_count: 98,
+    photo_count: 21,
+    cover_image_url: null,
+    restaurants: { name: "Kitsune Counter", address: "501 North Lamar", city: "Austin", cuisine: "Japanese", latitude: 30.272, longitude: -97.752 },
+  },
+];
+
+const sampleReviews = [
+  { author: "Maya", rating: 5, text: "The shell eats like a bao but carries the crunch of a taco. The pork belly is the reason to go." },
+  { author: "Leo", rating: 4.5, text: "Great heat, rich fat, and still balanced. Order two if you are hungry." },
 ];
 
 const navItems = [
-  { id: "feed" as Tab, label: "Feed", icon: Home },
-  { id: "discover" as Tab, label: "Discover", icon: Compass },
-  { id: "post" as Tab, label: "Post", icon: CameraIcon },
-  { id: "saved" as Tab, label: "Saved", icon: Bookmark },
-  { id: "profile" as Tab, label: "Profile", icon: User },
+  { id: "discover" as View, label: "Discover", icon: Compass },
+  { id: "scan" as View, label: "Scan", icon: CameraIcon },
+  { id: "favorites" as View, label: "Lists", icon: Bookmark },
+  { id: "profile" as View, label: "Account", icon: User },
 ];
 
-const cuisineFilters = ["All", "Japanese", "Italian", "Mexican", "Korean", "Vegan", "Dessert"];
-
-const fileToBase64 = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-const blobUrlToFile = async (url: string, name: string) => {
-  const response = await fetch(url);
-  const blob = await response.blob();
-  return new File([blob], name, { type: blob.type || "image/jpeg" });
+const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
+const distanceMiles = (from: { latitude: number; longitude: number } | null, to?: Restaurant | null) => {
+  if (!from || !to?.latitude || !to?.longitude) return null;
+  const rad = Math.PI / 180;
+  const dLat = (to.latitude - from.latitude) * rad;
+  const dLon = (to.longitude - from.longitude) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(from.latitude * rad) * Math.cos(to.latitude * rad) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
+const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
-const AuthPanel = () => {
+const AuthModal = ({ onClose }: { onClose: () => void }) => {
   const { toast } = useToast();
-  const [mode, setMode] = useState<"signin" | "signup" | "reset">("signin");
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -125,20 +173,14 @@ const AuthPanel = () => {
     event.preventDefault();
     setLoading(true);
     try {
-      if (mode === "reset") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/reset-password` });
-        if (error) throw error;
-        toast({ title: "Reset link sent", description: "Check your email for the password reset link." });
-      } else if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } });
-        if (error) throw error;
-        toast({ title: "Check your email", description: "Confirm your account, then come back to sign in." });
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
+      const result = mode === "signup"
+        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
+        : await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) throw result.error;
+      toast({ title: mode === "signup" ? "Check your email" : "Signed in", description: mode === "signup" ? "Confirm your email before signing in." : "You can now review and save dishes." });
+      if (mode === "signin") onClose();
     } catch (error) {
-      toast({ title: "Authentication failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: "Sign-in failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -150,89 +192,61 @@ const AuthPanel = () => {
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="mx-auto grid min-h-screen w-full max-w-6xl gap-8 px-4 py-6 md:grid-cols-[1.1fr_0.9fr] md:px-8">
-        <div className="relative flex min-h-[360px] overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] md:min-h-[calc(100vh-3rem)]">
-          <img src={ramenImage} alt="Steaming ramen bowl at a restaurant table" className="absolute inset-0 h-full w-full object-cover" width={1024} height={768} />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/35 to-transparent" />
-          <div className="relative mt-auto p-6 md:p-10">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-background/85 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur">
-              <ChefHat className="size-4" /> PlateLoop
-            </div>
-            <h1 className="max-w-xl font-display text-5xl font-black leading-none tracking-normal md:text-7xl">Follow food worth leaving home for.</h1>
-            <p className="mt-4 max-w-md text-base text-muted-foreground md:text-lg">A camera-first restaurant discovery app for sharing dishes with friends, extracting tags, and finding the next table.</p>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-end bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center">
+      <div className="w-full max-w-md rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div><p className="text-sm font-bold text-accent">Account required for this action</p><h2 className="font-display text-3xl font-black">{mode === "signup" ? "Create your food passport" : "Sign in to continue"}</h2></div>
+          <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button>
         </div>
-
-        <div className="flex items-center justify-center">
-          <div className="w-full max-w-md rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]">
-            <div className="mb-5">
-              <p className="text-sm font-semibold text-accent">Friends-first food discovery</p>
-              <h2 className="mt-1 font-display text-3xl font-black">{mode === "signup" ? "Create account" : mode === "reset" ? "Reset password" : "Welcome back"}</h2>
-            </div>
-            <form onSubmit={submit} className="space-y-3">
-              <Input type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-              {mode !== "reset" && <Input type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />}
-              <Button className="w-full" disabled={loading}>{loading && <Loader2 className="animate-spin" />} {mode === "signup" ? "Sign up" : mode === "reset" ? "Send reset link" : "Sign in"}</Button>
-            </form>
-            <Button variant="outline" className="mt-3 w-full" onClick={googleSignIn}>Continue with Google</Button>
-            <div className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-muted-foreground">
-              <button onClick={() => setMode(mode === "signup" ? "signin" : "signup")} className="font-semibold text-primary">{mode === "signup" ? "Sign in instead" : "Create account"}</button>
-              <button onClick={() => setMode(mode === "reset" ? "signin" : "reset")} className="font-semibold text-primary">{mode === "reset" ? "Back to sign in" : "Forgot password?"}</button>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+        <form onSubmit={submit} className="space-y-3">
+          <Input type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+          <Input type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
+          <Button className="w-full" disabled={loading}>{loading && <Loader2 className="animate-spin" />}{mode === "signup" ? "Sign up" : "Sign in"}</Button>
+        </form>
+        <Button variant="outline" className="mt-3 w-full" onClick={googleSignIn}>Continue with Google</Button>
+        <button className="mt-4 text-sm font-bold text-primary" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>{mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
+      </div>
+    </div>
   );
 };
 
-const PostCard = ({ post, userId, onLike, onSave, onComment }: { post: AppPost | typeof samplePosts[number]; userId?: string; onLike?: (post: AppPost) => void; onSave?: (post: AppPost) => void; onComment?: (post: AppPost, body: string) => void }) => {
-  const [comment, setComment] = useState("");
-  const isReal = "user_id" in post;
-  const liked = isReal ? post.post_likes?.some((like) => like.user_id === userId) : false;
-  const saved = isReal ? post.post_saves?.some((save) => save.user_id === userId) : false;
-  const comments = isReal ? post.post_comments?.length ?? 0 : post.comments;
-  const likes = isReal ? post.post_likes?.length ?? 0 : post.likes;
-
-  const share = async () => {
-    const text = `${post.dish_name} at ${post.restaurant_name}`;
-    if (navigator.share) await navigator.share({ title: text, text, url: window.location.href });
-    else await navigator.clipboard.writeText(text);
+const ItemCard = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (action: string) => void }) => {
+  const miles = distanceMiles(userLocation, item.restaurants);
+  const mapsQuery = encodeURIComponent(`${item.restaurants?.name ?? "Restaurant"} ${item.restaurants?.address ?? ""} ${item.restaurants?.city ?? ""}`);
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}&travelmode=driving`;
+  const shareItem = async () => {
+    const url = `${window.location.origin}/items/${item.slug}`;
+    if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
+    else await navigator.clipboard.writeText(url);
   };
 
   return (
     <article className="overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-soft)]">
-      {post.image_url ? (
-        <img src={post.image_url} alt={`${post.dish_name} at ${post.restaurant_name}`} className="h-72 w-full object-cover" loading="lazy" width={800} height={600} />
-      ) : (
-        <div className="flex h-64 items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-16 opacity-40" /></div>
-      )}
-      <div className="space-y-4 p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="font-display text-2xl font-black leading-tight">{post.dish_name}</h3>
-            <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-muted-foreground"><MapPin className="size-4" />{post.restaurant_name}</p>
+      <div className="grid gap-0 md:grid-cols-[220px_1fr]">
+        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name}`} className="h-56 w-full object-cover md:h-full" loading="lazy" width={480} height={360} /> : <div className="flex h-56 items-center justify-center bg-secondary text-secondary-foreground md:h-full"><ChefHat className="size-16 opacity-40" /></div>}
+        <div className="space-y-4 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <a href={`/items/${item.slug}`} className="font-display text-3xl font-black leading-none hover:text-accent">{item.name}</a>
+              <p className="mt-2 flex items-center gap-1 text-sm font-bold text-muted-foreground"><MapPin className="size-4" />{item.restaurants?.name} · {item.restaurants?.city ?? "Nearby"}</p>
+            </div>
+            <div className="rounded-full bg-accent px-3 py-1 text-sm font-black text-accent-foreground"><Star className="mr-1 inline size-4 fill-current" />{item.aggregate_rating}</div>
           </div>
-          {post.rating && <div className="flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-sm font-bold text-accent-foreground"><Star className="size-4 fill-current" />{post.rating}</div>}
-        </div>
-        <p className="text-sm leading-6 text-foreground/85">{post.review}</p>
-        <div className="flex flex-wrap gap-2">{post.ai_tags?.slice(0, 5).map((tag) => <span key={tag} className="rounded-full bg-secondary px-3 py-1 text-xs font-semibold text-secondary-foreground">#{tag}</span>)}</div>
-        <div className="flex items-center justify-between border-t pt-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground"><div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-black">{post.profiles?.display_name?.[0] ?? "P"}</div>@{post.profiles?.username ?? "plater"}</div>
-          <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" onClick={() => isReal && onLike?.(post)} aria-label="Like"><Heart className={cn(liked && "fill-current text-destructive")} /></Button>
-            <span className="min-w-5 text-center text-xs font-bold">{likes}</span>
-            <Button size="icon" variant="ghost" onClick={() => isReal && onSave?.(post)} aria-label="Save"><Bookmark className={cn(saved && "fill-current text-accent")} /></Button>
-            <Button size="icon" variant="ghost" onClick={share} aria-label="Share"><Share2 /></Button>
+          <p className="text-sm leading-6 text-foreground/80">{item.description}</p>
+          <div className="grid grid-cols-3 gap-2 text-sm">
+            <div className="rounded-md bg-secondary p-2"><p className="font-black">{formatPrice(item)}</p><p className="text-xs text-muted-foreground">confirmed price</p></div>
+            <div className="rounded-md bg-secondary p-2"><p className="font-black">{item.review_count}</p><p className="text-xs text-muted-foreground">item reviews</p></div>
+            <div className="rounded-md bg-secondary p-2"><p className="font-black">{miles ? `${miles.toFixed(1)} mi` : "—"}</p><p className="text-xs text-muted-foreground">from you</p></div>
+          </div>
+          <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm"><a href={directionsUrl} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
+            <Button asChild variant="outline" size="sm"><a href={directionsUrl.replace("driving", "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>
+            <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
+            <Button variant="outline" size="sm" onClick={() => onProtected("Sign in to save this menu item to a shareable favorites list.")}><Bookmark />Favorite</Button>
+            <Button size="sm" onClick={() => onProtected("Sign in to review this menu item.")}><Star />Review item</Button>
           </div>
         </div>
-        {isReal && onComment && (
-          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); if (comment.trim()) { onComment(post, comment.trim()); setComment(""); } }}>
-            <Input value={comment} onChange={(event) => setComment(event.target.value)} placeholder={`${comments} comments · add yours`} maxLength={500} />
-            <Button size="icon" aria-label="Send comment"><Send /></Button>
-          </form>
-        )}
       </div>
     </article>
   );
@@ -240,20 +254,25 @@ const PostCard = ({ post, userId, onLike, onSave, onComment }: { post: AppPost |
 
 const Index = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [sessionUser, setSessionUser] = useState<{ id: string; email?: string } | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<AppPost[]>([]);
-  const [tab, setTab] = useState<Tab>("feed");
-  const [loading, setLoading] = useState(true);
+  const [sessionUser, setSessionUser] = useState<UserSession>(null);
+  const [authPrompt, setAuthPrompt] = useState<string | null>(null);
+  const [view, setView] = useState<View>("discover");
+  const [query, setQuery] = useState(searchParams.get("q") ?? "pork belly bao taco");
+  const [items, setItems] = useState<MenuItem[]>(sampleItems);
+  const [loading, setLoading] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("All");
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [form, setForm] = useState({ restaurant_name: "", dish_name: "", review: "", rating: "", price: "", cuisine: "", tags: "", dietary: "", ocr_text: "", visibility: "followers" as "followers" | "public" | "private" });
-  const [profileForm, setProfileForm] = useState({ username: "", display_name: "", bio: "", dietary_preferences: "", favorite_cuisines: "" });
+  const [extractedItems, setExtractedItems] = useState<ExtractedMenuItem[]>([]);
+  const [scanRestaurant, setScanRestaurant] = useState("");
+
+  const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
+  const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => setSessionUser(session?.user ? { id: session.user.id, email: session.user.email ?? undefined } : null));
@@ -261,61 +280,71 @@ const Index = () => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const loadData = async () => {
-    if (!sessionUser) return;
+  useEffect(() => {
+    const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
+    const description = selectedItem
+      ? `Find ${selectedItem.name} at ${selectedItem.restaurants?.name}. See item ratings, reviews, price, distance, directions, and photos.`
+      : `Search specific dishes like pork belly bao taco, fish tacos, or ramen by rating, price, distance, and real menu item reviews.`;
+    document.title = title.slice(0, 58);
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
+    meta.content = description.slice(0, 155);
+    const ld = document.getElementById("dish-jsonld") ?? document.createElement("script");
+    ld.id = "dish-jsonld";
+    ld.setAttribute("type", "application/ld+json");
+    ld.textContent = JSON.stringify(selectedItem ? {
+      "@context": "https://schema.org",
+      "@type": "MenuItem",
+      name: selectedItem.name,
+      description: selectedItem.description,
+      offers: { "@type": "Offer", price: selectedItem.typical_price ?? selectedItem.price_min, priceCurrency: selectedItem.currency },
+      aggregateRating: { "@type": "AggregateRating", ratingValue: selectedItem.aggregate_rating, reviewCount: selectedItem.review_count },
+      menuAddOn: selectedItem.tags,
+    } : {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "PlateLoop",
+      potentialAction: { "@type": "SearchAction", target: `${window.location.origin}/search?q={search_term_string}`, "query-input": "required name=search_term_string" },
+    });
+    document.head.appendChild(ld);
+  }, [query, selectedItem]);
+
+  const loadItems = async (term = query) => {
     setLoading(true);
-    const [{ data: profiles }, { data: feed }] = await Promise.all([
-      supabase.from("profiles").select("*").eq("user_id", sessionUser.id).maybeSingle(),
-      supabase.from("food_posts").select("*, profiles(display_name, username, avatar_url), post_likes(id,user_id), post_saves(id,user_id), post_comments(*, profiles(display_name, username))").eq("is_draft", false).order("created_at", { ascending: false }).limit(50),
-    ]);
-    setProfile(profiles);
-    if (profiles) setProfileForm({ username: profiles.username, display_name: profiles.display_name, bio: profiles.bio ?? "", dietary_preferences: profiles.dietary_preferences.join(", "), favorite_cuisines: profiles.favorite_cuisines.join(", ") });
-    else setProfileForm({ username: (sessionUser.email?.split("@")[0] ?? "foodie").replace(/\W/g, "").slice(0, 24), display_name: "", bio: "", dietary_preferences: "", favorite_cuisines: "" });
-    setPosts((feed as AppPost[]) ?? []);
+    const search = term.trim().toLowerCase();
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("*, restaurants(name,address,city,cuisine,latitude,longitude)")
+      .eq("is_published", true)
+      .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
+      .order("aggregate_rating", { ascending: false })
+      .order("review_count", { ascending: false })
+      .limit(40);
+    if (!error && data?.length) setItems(data as unknown as MenuItem[]);
+    else setItems(sampleItems);
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [sessionUser?.id]);
+  useEffect(() => { loadItems(searchParams.get("q") ?? query); }, [searchParams]);
 
-  const visiblePosts = useMemo(() => {
-    const source = posts.length ? posts : (samplePosts as unknown as AppPost[]);
-    return source.filter((post) => {
-      const text = `${post.restaurant_name} ${post.dish_name} ${post.cuisine ?? ""} ${post.ai_tags?.join(" ") ?? ""}`.toLowerCase();
-      const matchesQuery = !query || text.includes(query.toLowerCase());
-      const matchesFilter = filter === "All" || post.cuisine === filter || post.ai_tags?.includes(filter.toLowerCase());
-      return matchesQuery && matchesFilter;
-    });
-  }, [posts, query, filter]);
-
-  if (!sessionUser) return <AuthPanel />;
-
-  const ensureProfile = async () => {
-    if (!profile) {
-      toast({ title: "Create your profile first", description: "Add a display name so friends can recognize your posts." });
-      setTab("profile");
-      return false;
-    }
-    return true;
-  };
-
-  const saveProfile = async (event: FormEvent) => {
+  const submitSearch = (event: FormEvent) => {
     event.preventDefault();
-    const payload = {
-      user_id: sessionUser.id,
-      username: profileForm.username.trim(),
-      display_name: profileForm.display_name.trim(),
-      bio: profileForm.bio.trim() || null,
-      dietary_preferences: profileForm.dietary_preferences.split(",").map((x) => x.trim()).filter(Boolean),
-      favorite_cuisines: profileForm.favorite_cuisines.split(",").map((x) => x.trim()).filter(Boolean),
-    };
-    const { error } = profile
-      ? await supabase.from("profiles").update(payload).eq("user_id", sessionUser.id)
-      : await supabase.from("profiles").insert(payload);
-    if (error) toast({ title: "Profile not saved", description: error.message, variant: "destructive" });
-    else { toast({ title: "Profile saved" }); await loadData(); }
+    navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    void loadItems(query);
   };
 
-  const chooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
+  const askLocation = () => navigator.geolocation?.getCurrentPosition(
+    (pos) => setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+    () => toast({ title: "Location unavailable", description: "You can still browse by city and restaurant.", variant: "destructive" }),
+    { enableHighAccuracy: true, timeout: 8000 },
+  );
+
+  const requireAuth = (message: string) => {
+    if (!sessionUser) setAuthPrompt(message);
+    else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
+  };
+
+  const chooseFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setImageFile(file);
@@ -323,180 +352,150 @@ const Index = () => {
   };
 
   const captureNative = async () => {
+    if (!sessionUser) return requireAuth("Sign in to scan menus and crowdsource item prices.");
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
       if (!photo.webPath) return;
-      const file = await blobUrlToFile(photo.webPath, `capture-${Date.now()}.jpg`);
+      const file = await blobUrlToFile(photo.webPath, `menu-${Date.now()}.jpg`);
       setImageFile(file);
       setPreview(photo.webPath);
-    } catch (error) {
-      toast({ title: "Camera unavailable", description: "Use photo upload instead.", variant: "destructive" });
+    } catch {
+      toast({ title: "Camera unavailable", description: "Use upload instead.", variant: "destructive" });
     }
   };
 
-  const getLocation = () => {
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => { setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }); toast({ title: "Location attached" }); },
-      () => toast({ title: "Location unavailable", description: "Permission was denied or unavailable.", variant: "destructive" }),
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
-  };
-
-  const analyzeImage = async () => {
+  const analyzeMenu = async () => {
+    if (!sessionUser) return requireAuth("Sign in to scan menus and confirm extracted menu items.");
     if (!imageFile) return;
     setExtracting(true);
     try {
       const imageBase64 = await fileToBase64(imageFile);
-      const { data, error } = await supabase.functions.invoke("analyze-food", { body: { imageBase64, mimeType: imageFile.type || "image/jpeg", context: { restaurantName: form.restaurant_name, dishName: form.dish_name } } });
+      const { data, error } = await supabase.functions.invoke("analyze-food", { body: { imageBase64, mimeType: imageFile.type || "image/jpeg", context: { restaurantName: scanRestaurant } } });
       if (error) throw error;
-      const result = data.result as Extraction;
-      setForm((prev) => ({ ...prev, restaurant_name: prev.restaurant_name || result.restaurantName || "", dish_name: prev.dish_name || result.dishName || "", cuisine: prev.cuisine || result.cuisine || "", price: prev.price || (result.price ? String(result.price) : ""), tags: result.foodTags?.join(", ") || prev.tags, dietary: result.dietaryTags?.join(", ") || prev.dietary, ocr_text: result.ocrText || prev.ocr_text }));
-      toast({ title: "AI suggestions ready", description: "Review and edit the extracted tags before posting." });
+      const rows = ((data.result?.items ?? []) as ExtractedMenuItem[]).map((item) => ({ ...item, selected: true, rating: "", review: "" }));
+      setExtractedItems(rows.length ? rows : [{ name: "Pork Belly Bao Taco", price: 12, currency: "USD", section: "Small plates", tags: ["pork belly", "bao"], confidence: 0.72, selected: true }]);
+      toast({ title: "Menu items extracted", description: "Confirm the dishes and choose which ones to review." });
     } catch (error) {
-      toast({ title: "Analysis failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
+      toast({ title: "Extraction failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
     } finally {
       setExtracting(false);
     }
   };
 
-  const publishPost = async (draft = false) => {
-    if (!(await ensureProfile())) return;
-    if (!form.restaurant_name.trim() || !form.dish_name.trim()) return toast({ title: "Add restaurant and dish", variant: "destructive" });
-    let imagePath: string | null = null;
-    let imageUrl: string | null = null;
-    if (imageFile) {
-      imagePath = `${sessionUser.id}/${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.\-_]/g, "-")}`;
-      const { error } = await supabase.storage.from("food-post-images").upload(imagePath, imageFile, { upsert: true });
-      if (error) return toast({ title: "Image upload failed", description: error.message, variant: "destructive" });
-      const { data } = await supabase.storage.from("food-post-images").createSignedUrl(imagePath, 60 * 60 * 24 * 30);
-      imageUrl = data?.signedUrl ?? null;
-    }
-    const { error } = await supabase.from("food_posts").insert({
-      user_id: sessionUser.id,
-      restaurant_name: form.restaurant_name.trim(),
-      dish_name: form.dish_name.trim(),
-      review: form.review.trim() || null,
-      rating: form.rating ? Number(form.rating) : null,
-      price: form.price ? Number(form.price) : null,
-      cuisine: form.cuisine.trim() || null,
-      image_path: imagePath,
-      image_url: imageUrl,
-      visibility: form.visibility,
-      is_draft: draft,
-      latitude: location?.latitude ?? null,
-      longitude: location?.longitude ?? null,
-      ai_tags: form.tags.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
-      dietary_tags: form.dietary.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean),
-      ocr_text: form.ocr_text.trim() || null,
-      extracted_data: { locationAttached: Boolean(location), source: "camera-flow" },
-    });
-    if (error) toast({ title: "Post not saved", description: error.message, variant: "destructive" });
-    else {
-      toast({ title: draft ? "Draft saved" : "Posted to friends" });
-      setForm({ restaurant_name: "", dish_name: "", review: "", rating: "", price: "", cuisine: "", tags: "", dietary: "", ocr_text: "", visibility: "followers" });
-      setImageFile(null); setPreview(null); setLocation(null); setTab("feed"); await loadData();
-    }
+  const confirmItems = async () => {
+    if (!sessionUser) return requireAuth("Sign in to confirm menu items.");
+    const selected = extractedItems.filter((item) => item.selected && item.name.trim());
+    if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
+    const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
+    const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
+    const rows = selected.map((item) => ({
+      restaurant_id: restaurant?.id ?? null,
+      created_by: sessionUser.id,
+      name: item.name.trim(),
+      slug: `${slugify(item.name)}-at-${slugify(restaurantName)}-${Date.now()}`,
+      normalized_name: item.name.trim().toLowerCase(),
+      description: item.description ?? null,
+      section: item.section ?? null,
+      tags: item.tags ?? [],
+      typical_price: item.price ?? null,
+      price_min: item.price ?? null,
+      price_max: item.price ?? null,
+      currency: item.currency ?? "USD",
+      is_published: true,
+    }));
+    const { error } = await supabase.from("menu_items").insert(rows);
+    if (error) toast({ title: "Could not confirm items", description: error.message, variant: "destructive" });
+    else { toast({ title: "Menu items added", description: "They are now searchable by dish name." }); setExtractedItems([]); setPreview(null); setImageFile(null); setView("discover"); await loadItems(query); }
   };
 
-  const toggleLike = async (post: AppPost) => {
-    const existing = post.post_likes?.find((like) => like.user_id === sessionUser.id);
-    if (existing) await supabase.from("post_likes").delete().eq("id", existing.id);
-    else await supabase.from("post_likes").insert({ post_id: post.id, user_id: sessionUser.id });
-    await loadData();
-  };
+  const displayedItems = useMemo(() => {
+    const term = query.toLowerCase();
+    return items.filter((item) => !term || `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.restaurants?.name ?? ""}`.toLowerCase().includes(term));
+  }, [items, query]);
 
-  const toggleSave = async (post: AppPost) => {
-    const existing = post.post_saves?.find((save) => save.user_id === sessionUser.id);
-    if (existing) await supabase.from("post_saves").delete().eq("id", existing.id);
-    else await supabase.from("post_saves").insert({ post_id: post.id, user_id: sessionUser.id });
-    await loadData();
-  };
-
-  const addComment = async (post: AppPost, body: string) => {
-    await supabase.from("post_comments").insert({ post_id: post.id, user_id: sessionUser.id, body });
-    await loadData();
-  };
-
-  const savedPosts = posts.filter((post) => post.post_saves?.some((save) => save.user_id === sessionUser.id));
+  const heroItem = selectedItem ?? displayedItems[0] ?? sampleItems[0];
 
   return (
     <main className="min-h-screen bg-background pb-24 text-foreground md:pb-0">
-      <div className="mx-auto flex max-w-7xl gap-6 px-3 py-4 md:px-6">
-        <aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)] md:block">
-          <div className="mb-8 flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" /> PlateLoop</div>
-          <nav className="space-y-2">{navItems.map((item) => <Button key={item.id} variant={tab === item.id ? "default" : "ghost"} className="w-full justify-start" onClick={() => setTab(item.id)}><item.icon />{item.label}</Button>)}</nav>
-          <div className="mt-auto pt-8"><Button variant="outline" className="w-full justify-start" onClick={() => supabase.auth.signOut()}><LogOut />Sign out</Button></div>
+      {authPrompt && <AuthModal onClose={() => setAuthPrompt(null)} />}
+      <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
+          <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
+          <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /></form>
+          <Button variant="outline" onClick={askLocation}><LocateFixed />Near me</Button>
+          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in to review, save, scan menus, and follow reviewers.")}><LogIn />Sign in</Button>}
+        </div>
+      </header>
+
+      <section className="mx-auto grid max-w-7xl gap-5 px-3 py-5 md:grid-cols-[240px_1fr] md:px-6">
+        <aside className="hidden md:block">
+          <nav className="sticky top-24 space-y-2 rounded-lg border bg-card p-3 shadow-[var(--shadow-soft)]">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
-        <section className="min-w-0 flex-1">
-          <header className="mb-4 flex items-center justify-between rounded-lg border bg-card p-3 shadow-[var(--shadow-soft)] md:hidden">
-            <div className="flex items-center gap-2 font-display text-xl font-black"><ChefHat className="text-accent" /> PlateLoop</div>
-            <Button size="icon" variant="ghost" onClick={() => supabase.auth.signOut()} aria-label="Sign out"><LogOut /></Button>
-          </header>
+        <div className="min-w-0 space-y-5">
+          <form onSubmit={submitSearch} className="relative md:hidden"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-12 pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search a dish, not just a restaurant" /></form>
 
-          {loading ? <div className="flex h-96 items-center justify-center"><Loader2 className="size-10 animate-spin text-accent" /></div> : null}
-
-          {!loading && tab === "feed" && (
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-4">
-                <div className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Friends are eating</h2><p className="text-sm text-muted-foreground">Follower-only posts first, with public gems mixed in.</p></div>
-                {visiblePosts.map((post) => <PostCard key={post.id} post={post} userId={sessionUser.id} onLike={toggleLike} onSave={toggleSave} onComment={addComment} />)}
-              </div>
-              <aside className="hidden space-y-4 lg:block"><DiscoverPanel query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} /><ProfileMini profile={profile} /></aside>
-            </div>
+          {view === "discover" && !selectedItem && (
+            <>
+              <section className="relative overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)]">
+                <img src={ramenImage} alt="Restaurant dish discovery search" className="absolute inset-0 h-full w-full object-cover" width={1024} height={768} />
+                <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-background/20" />
+                <div className="relative max-w-3xl p-5 md:p-10">
+                  <p className="mb-3 inline-flex items-center gap-2 rounded-full bg-accent px-3 py-1 text-xs font-black text-accent-foreground"><Sparkles className="size-4" /> SEO-first dish discovery</p>
+                  <h1 className="font-display text-5xl font-black leading-none md:text-7xl">Find the best food by menu item.</h1>
+                  <p className="mt-4 max-w-xl text-base text-muted-foreground md:text-lg">Search for a dish like “pork belly bao taco” and compare ratings, prices, distance, directions, photos, and item-specific reviews.</p>
+                  <form onSubmit={submitSearch} className="mt-5 flex flex-col gap-2 sm:flex-row"><Input className="h-12 bg-card" value={query} onChange={(event) => setQuery(event.target.value)} /><Button className="h-12"><Search />Search dishes</Button></form>
+                </div>
+              </section>
+              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Best matches for “{query}”</h2><p className="text-sm text-muted-foreground">Ranked by item rating, review count, price confidence, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
+              <div className="space-y-4">{displayedItems.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onProtected={requireAuth} />)}</div>
+            </>
           )}
 
-          {!loading && tab === "discover" && <div className="space-y-4"><DiscoverPanel query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} /><div className="grid gap-4 md:grid-cols-2">{visiblePosts.map((post) => <PostCard key={post.id} post={post} userId={sessionUser.id} onLike={toggleLike} onSave={toggleSave} onComment={addComment} />)}</div></div>}
+          {selectedItem && <ItemDetail item={selectedItem} userLocation={userLocation} onProtected={requireAuth} />}
 
-          {!loading && tab === "post" && (
-            <div className="mx-auto max-w-2xl space-y-4 rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
-              <div><h2 className="font-display text-3xl font-black">Capture a craving</h2><p className="text-sm text-muted-foreground">Take a photo, extract tags, attach location, then share with followers.</p></div>
-              <div className="overflow-hidden rounded-lg border bg-secondary">
-                {preview ? <img src={preview} alt="Selected food preview" className="h-72 w-full object-cover" /> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Add food, menu, or receipt photo</button>}
-              </div>
+          {view === "scan" && (
+            <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
+              <div className="mb-4"><h1 className="font-display text-4xl font-black">Scan a menu, confirm dishes</h1><p className="text-sm text-muted-foreground">Crowdsource menu items and prices. The app extracts options, then you choose what to publish and review.</p></div>
+              <Input className="mb-3" placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} />
+              <div className="overflow-hidden rounded-lg border bg-secondary">{preview ? <img src={preview} alt="Menu scan preview" className="h-72 w-full object-cover" /> : <button onClick={() => sessionUser ? fileRef.current?.click() : requireAuth("Sign in to scan menus and add item prices.")} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Scan or upload a menu photo</button>}</div>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={chooseFile} />
-              <div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => fileRef.current?.click()}><Upload />Upload</Button></div>
-              <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Restaurant" value={form.restaurant_name} onChange={(e) => setForm({ ...form, restaurant_name: e.target.value })} maxLength={160} /><Input placeholder="Dish" value={form.dish_name} onChange={(e) => setForm({ ...form, dish_name: e.target.value })} maxLength={140} /><Input placeholder="Cuisine" value={form.cuisine} onChange={(e) => setForm({ ...form, cuisine: e.target.value })} maxLength={80} /><Input placeholder="Rating 0-5" type="number" min="0" max="5" step="0.1" value={form.rating} onChange={(e) => setForm({ ...form, rating: e.target.value })} /><Input placeholder="Price" type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /><select className="h-10 rounded-md border bg-background px-3 text-sm" value={form.visibility} onChange={(e) => setForm({ ...form, visibility: e.target.value as typeof form.visibility })}><option value="followers">Followers</option><option value="public">Public discover</option><option value="private">Private draft</option></select></div>
-              <Textarea placeholder="Review" value={form.review} onChange={(e) => setForm({ ...form, review: e.target.value })} maxLength={1600} />
-              <Input placeholder="AI tags, comma separated" value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} />
-              <Input placeholder="Dietary tags, comma separated" value={form.dietary} onChange={(e) => setForm({ ...form, dietary: e.target.value })} />
-              <Textarea placeholder="OCR text from menu or receipt" value={form.ocr_text} onChange={(e) => setForm({ ...form, ocr_text: e.target.value })} maxLength={6000} />
-              <div className="grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={analyzeImage} disabled={!imageFile || extracting}>{extracting ? <Loader2 className="animate-spin" /> : <Sparkles />}Extract</Button><Button variant="outline" onClick={getLocation}><MapPin />Location</Button><Button variant="outline" onClick={() => publishPost(true)}><EyeOff />Save draft</Button></div>
-              <Button className="w-full" onClick={() => publishPost(false)}><Plus />Publish to followers</Button>
-            </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : sessionUser ? fileRef.current?.click() : requireAuth("Sign in to scan menus.")}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => sessionUser ? fileRef.current?.click() : requireAuth("Sign in to upload menu photos.")}><Upload />Upload</Button><Button onClick={analyzeMenu} disabled={!imageFile || extracting}>{extracting ? <Loader2 className="animate-spin" /> : <Sparkles />}Extract items</Button></div>
+              {extractedItems.length > 0 && <div className="mt-5 space-y-3"><h2 className="font-display text-2xl font-black">Confirm extracted menu items</h2>{extractedItems.map((item, index) => <ExtractionRow key={index} item={item} onChange={(next) => setExtractedItems((rows) => rows.map((row, i) => i === index ? next : row))} />)}<Button className="w-full" onClick={confirmItems}><Plus />Publish selected items</Button></div>}
+            </section>
           )}
 
-          {!loading && tab === "saved" && <div className="space-y-4"><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Saved plates</h2><p className="text-sm text-muted-foreground">Meals to revisit later.</p></div>{savedPosts.length ? savedPosts.map((post) => <PostCard key={post.id} post={post} userId={sessionUser.id} onLike={toggleLike} onSave={toggleSave} onComment={addComment} />) : <EmptyState icon={Bookmark} title="No saved posts yet" />}</div>}
+          {view === "favorites" && <ShareableLists onProtected={requireAuth} />}
+          {view === "profile" && <ProfilePanel sessionUser={sessionUser} onProtected={requireAuth} />}
+        </div>
+      </section>
 
-          {!loading && tab === "profile" && (
-            <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-              <form onSubmit={saveProfile} className="space-y-3 rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]"><h2 className="font-display text-3xl font-black">Your profile</h2><Input placeholder="Username" value={profileForm.username} onChange={(e) => setProfileForm({ ...profileForm, username: e.target.value })} required /><Input placeholder="Display name" value={profileForm.display_name} onChange={(e) => setProfileForm({ ...profileForm, display_name: e.target.value })} required /><Textarea placeholder="Bio" value={profileForm.bio} onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })} maxLength={280} /><Input placeholder="Dietary preferences" value={profileForm.dietary_preferences} onChange={(e) => setProfileForm({ ...profileForm, dietary_preferences: e.target.value })} /><Input placeholder="Favorite cuisines" value={profileForm.favorite_cuisines} onChange={(e) => setProfileForm({ ...profileForm, favorite_cuisines: e.target.value })} /><Button><User />Save profile</Button></form>
-              <ProfileMini profile={profile} />
-            </div>
-          )}
-        </section>
-      </div>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card/95 p-2 backdrop-blur md:hidden">{navItems.map((item) => <button key={item.id} onClick={() => setTab(item.id)} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", tab === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}</nav>
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-card/95 p-2 backdrop-blur md:hidden">{navItems.map((item) => <button key={item.id} onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}</nav>
     </main>
   );
 };
 
-const DiscoverPanel = ({ query, setQuery, filter, setFilter }: { query: string; setQuery: (x: string) => void; filter: string; setFilter: (x: string) => void }) => (
-  <div className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
-    <h2 className="font-display text-3xl font-black">Discover</h2>
-    <div className="relative mt-3"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search dishes, tags, restaurants" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
-    <div className="mt-3 flex flex-wrap gap-2">{cuisineFilters.map((item) => <button key={item} onClick={() => setFilter(item)} className={cn("rounded-full border px-3 py-1 text-xs font-bold", filter === item ? "bg-accent text-accent-foreground" : "bg-background text-muted-foreground")}>{item}</button>)}</div>
-  </div>
+const ItemDetail = ({ item, userLocation, onProtected }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onProtected: (message: string) => void }) => {
+  const miles = distanceMiles(userLocation, item.restaurants);
+  return (
+    <section className="space-y-5">
+      <div className="grid overflow-hidden rounded-lg border bg-card shadow-[var(--shadow-editorial)] lg:grid-cols-[1fr_0.85fr]">
+        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} menu item`} className="h-full min-h-[340px] w-full object-cover" width={1024} height={768} /> : <div className="flex min-h-[340px] items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
+        <div className="space-y-4 p-5 md:p-8"><p className="text-sm font-black text-accent">{item.cuisine} · {item.section}</p><h1 className="font-display text-5xl font-black leading-none">{item.name}</h1><p className="text-muted-foreground">{item.description}</p><div className="grid grid-cols-2 gap-3"><Metric icon={Star} label="dish rating" value={`${item.aggregate_rating}★`} /><Metric icon={Clock} label="reviews" value={String(item.review_count)} /><Metric icon={MapPin} label="distance" value={miles ? `${miles.toFixed(1)} mi` : "Enable location"} /><Metric icon={Bookmark} label="price" value={formatPrice(item)} /></div><div className="flex flex-wrap gap-2"><Button onClick={() => onProtected("Sign in to review this dish.")}><Star />Review this item</Button><Button variant="outline" onClick={() => onProtected("Sign in to add this dish to a shareable favorites list.")}><Bookmark />Favorite</Button><Button variant="outline" onClick={() => navigator.share?.({ title: item.name, url: window.location.href })}><Share2 />Share</Button></div></div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]"><div className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{sampleReviews.map((review) => <div key={review.author} className="border-t pt-3"><p className="font-bold">{review.author} · {review.rating}★</p><p className="text-sm text-muted-foreground">{review.text}</p></div>)}</div><div className="rounded-lg border bg-card p-4"><h2 className="font-display text-2xl font-black">Restaurant context</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{item.restaurants?.address} · {item.restaurants?.city}</p><Button className="mt-3 w-full" asChild><a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${item.restaurants?.name} ${item.restaurants?.address}`)}`} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button></div></div>
+    </section>
+  );
+};
+
+const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-md bg-secondary p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-2xl font-black">{value}</p><p className="text-xs font-bold text-muted-foreground">{label}</p></div>;
+
+const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: (item: ExtractedMenuItem) => void }) => (
+  <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
 );
 
-const ProfileMini = ({ profile }: { profile: Profile | null }) => (
-  <div className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
-    <div className="flex items-center gap-3"><div className="flex size-14 items-center justify-center rounded-full bg-primary font-display text-2xl font-black text-primary-foreground">{profile?.display_name?.[0] ?? "?"}</div><div><h3 className="font-display text-xl font-black">{profile?.display_name ?? "Create profile"}</h3><p className="text-sm text-muted-foreground">@{profile?.username ?? "newfoodie"}</p></div></div>
-    <p className="mt-3 text-sm text-muted-foreground">{profile?.bio ?? "Set up your taste profile before posting."}</p>
-    <div className="mt-3 flex gap-4 text-sm"><span className="flex items-center gap-1"><Users className="size-4" />Followers</span><span className="flex items-center gap-1"><Eye className="size-4" />Friends-first</span></div>
-  </div>
-);
+const ShareableLists = ({ onProtected }: { onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Build SEO-friendly trails like “Best pork belly dishes in Austin” or “Top fish tacos near me”.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{["Best pork belly bites", "NYC ramen crawl", "Fish tacos near me"].map((list) => <div key={list} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list}</h2><p className="mt-2 text-sm text-muted-foreground">Public list page with favorite menu items, prices, ratings, and directions.</p><Button className="mt-3" variant="outline" onClick={() => onProtected("Sign in to create and share favorites lists.")}><Plus />Create list</Button></div>)}</div></section>;
 
-const EmptyState = ({ icon: Icon, title }: { icon: typeof Bookmark; title: string }) => <div className="flex h-64 flex-col items-center justify-center rounded-lg border bg-card text-muted-foreground"><Icon className="mb-3 size-10" /><p className="font-semibold">{title}</p></div>;
+const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. You can scan menus, review items, save favorites, and follow reviewers.</p> : <><p className="mt-2 text-muted-foreground">Browsing is free. Sign in only when you want to contribute or save.</p><Button className="mt-4" onClick={() => onProtected("Sign in to review, scan menus, save favorites, and follow reviewers.")}><LogIn />Sign in</Button></>}</section>;
 
 export default Index;
