@@ -642,7 +642,11 @@ const Index = () => {
         </div>
       </section>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-card/95 p-2 backdrop-blur md:hidden">{navItems.map((item) => <button key={item.id} onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}</nav>
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 items-center border-t bg-card/95 p-2 backdrop-blur md:hidden">
+        {navItems.slice(0, 2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}
+        <button onClick={() => setSearchPanelOpen((open) => !open)} className={cn("mx-auto -mt-7 flex size-16 flex-col items-center justify-center rounded-full border-4 border-background bg-accent text-accent-foreground shadow-[var(--shadow-editorial)] transition hover:scale-105", searchPanelOpen && "bg-primary text-primary-foreground")} aria-label="Open search"><Search className="size-7" /></button>
+        {navItems.slice(2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-semibold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}
+      </nav>
     </main>
   );
 };
