@@ -452,7 +452,20 @@ const Index = () => {
       setImageFiles((current) => [...current, file].slice(0, 6));
       setPhotoPreviews((current) => [...current, photo.webPath].slice(0, 6));
     } catch {
-      toast({ title: "Camera unavailable", description: "Use upload instead.", variant: "destructive" });
+      toast({ title: "Camera unavailable", description: "Select photos instead.", variant: "destructive" });
+    }
+  };
+
+  const selectPhotos = async () => {
+    if (!Capacitor.isNativePlatform()) return fileRef.current?.click();
+    try {
+      const result = await Camera.pickImages({ quality: 85, limit: 6 });
+      const photos = result.photos.filter((photo) => photo.webPath);
+      const files = await Promise.all(photos.map((photo, index) => blobUrlToFile(photo.webPath!, `food-review-${Date.now()}-${index}.jpg`)));
+      setImageFiles((current) => [...current, ...files].slice(0, 6));
+      setPhotoPreviews((current) => [...current, ...photos.map((photo) => photo.webPath!)].slice(0, 6));
+    } catch {
+      toast({ title: "Photo library unavailable", description: "Try selecting photos from the browser picker.", variant: "destructive" });
     }
   };
 
@@ -523,9 +536,9 @@ const Index = () => {
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
               <div className="mb-4"><h1 className="font-display text-4xl font-black">Start a food review</h1><p className="text-sm text-muted-foreground">Take one or more photos of the dish, then find the menu item and post your review.</p></div>
               <div className="grid gap-3 md:grid-cols-2"><Input placeholder="Restaurant name" value={scanRestaurant} onChange={(event) => setScanRestaurant(event.target.value)} /><Input placeholder="Dish name" value={scanDish} onChange={(event) => setScanDish(event.target.value)} /></div>
-              <div className="mt-3 overflow-hidden rounded-lg border bg-secondary">{photoPreviews.length ? <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">{photoPreviews.map((photo, index) => <div key={photo} className="relative overflow-hidden rounded-md border bg-background"><img src={photo} alt={`Food review photo ${index + 1}`} className="h-44 w-full object-cover" /><Button type="button" size="icon" variant="secondary" className="absolute right-2 top-2" onClick={() => removeReviewPhoto(index)} aria-label="Remove photo"><X /></Button></div>)}</div> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Take or upload food photos</button>}</div>
+              <div className="mt-3 overflow-hidden rounded-lg border bg-secondary">{photoPreviews.length ? <div className="grid gap-2 p-2 sm:grid-cols-2 lg:grid-cols-3">{photoPreviews.map((photo, index) => <div key={photo} className="relative overflow-hidden rounded-md border bg-background"><img src={photo} alt={`Food review photo ${index + 1}`} className="h-44 w-full object-cover" /><Button type="button" size="icon" variant="secondary" className="absolute right-2 top-2" onClick={() => removeReviewPhoto(index)} aria-label="Remove photo"><X /></Button></div>)}</div> : <button onClick={() => fileRef.current?.click()} className="flex h-72 w-full flex-col items-center justify-center gap-3 text-muted-foreground"><CameraIcon className="size-12" />Take or select food photos</button>}</div>
               <input ref={fileRef} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={chooseFile} />
-              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={() => fileRef.current?.click()}><Upload />Upload photos</Button><Button onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => Capacitor.isNativePlatform() ? captureNative() : fileRef.current?.click()}><CameraIcon />Camera</Button><Button variant="outline" onClick={selectPhotos}><Upload />Select photos</Button><Button onClick={startPhotoReview} disabled={!imageFiles.length}><Star />Start review</Button></div>
             </section>
           )}
 
