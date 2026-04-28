@@ -460,7 +460,7 @@ const Index = () => {
   const confirmItems = async () => {
     const selected = extractedItems.filter((item) => item.selected && item.name.trim());
     if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
-    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items, reviews, and your contribution history.");
+    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items and your contribution history.");
     const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
     const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
     const rows = selected.map((item) => ({
@@ -499,7 +499,7 @@ const Index = () => {
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
           <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /></form>
           <Button variant="outline" onClick={askLocation}><LocateFixed />Near me</Button>
-          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only to save favorites, reviews, lists, or contribution history.")}><LogIn />Sign in</Button>}
+          {sessionUser ? <Button variant="ghost" onClick={() => supabase.auth.signOut()}>Sign out</Button> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
