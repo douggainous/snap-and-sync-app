@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
+import { z } from "zod";
 import {
   Bookmark,
   Camera as CameraIcon,
@@ -76,6 +77,26 @@ type ExtractedMenuItem = {
   rating?: string;
   review?: string;
 };
+type MenuItemReview = {
+  id: string;
+  rating: number;
+  review?: string | null;
+  price_paid?: number | null;
+  currency: string;
+  tags: string[];
+  would_order_again?: boolean | null;
+  created_at?: string;
+};
+
+const reviewSchema = z.object({
+  rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
+  review: z.string().trim().max(1200, "Keep reviews under 1200 characters.").optional(),
+  price_paid: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
+  tags: z.string().trim().max(140, "Tags are too long.").optional(),
+  would_order_again: z.boolean(),
+});
+
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const sampleItems: MenuItem[] = [
   {
