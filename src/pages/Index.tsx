@@ -352,7 +352,6 @@ const Index = () => {
   };
 
   const captureNative = async () => {
-    if (!sessionUser) return requireAuth("Sign in to scan menus and crowdsource item prices.");
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
       if (!photo.webPath) return;
@@ -365,7 +364,6 @@ const Index = () => {
   };
 
   const analyzeMenu = async () => {
-    if (!sessionUser) return requireAuth("Sign in to scan menus and confirm extracted menu items.");
     if (!imageFile) return;
     setExtracting(true);
     try {
@@ -383,9 +381,9 @@ const Index = () => {
   };
 
   const confirmItems = async () => {
-    if (!sessionUser) return requireAuth("Sign in to confirm menu items.");
     const selected = extractedItems.filter((item) => item.selected && item.name.trim());
     if (!selected.length) return toast({ title: "Select at least one item", variant: "destructive" });
+    if (!sessionUser) return requireAuth("Sign in to save confirmed menu items, reviews, and your contribution history.");
     const restaurantName = scanRestaurant.trim() || "Unknown restaurant";
     const { data: restaurant } = await supabase.from("restaurants").insert({ name: restaurantName, created_by: sessionUser.id }).select("id").single();
     const rows = selected.map((item) => ({
