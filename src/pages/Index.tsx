@@ -187,6 +187,7 @@ const navItems = [
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
+const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
   let meta = document.querySelector<HTMLMetaElement>(selector);
   if (!meta) {
