@@ -227,6 +227,12 @@ const filterDemoItems = (term: string) => {
   return filtered.length ? filtered : sampleItems;
 };
 const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
+const sanitizePostgrestSearch = (value: string) => value
+  .trim()
+  .toLowerCase()
+  .replace(/[^a-z0-9\s'&/-]/g, " ")
+  .replace(/\s+/g, " ")
+  .slice(0, 80);
 const menuItemUrl = (slug: string) => `${window.location.origin}/items/${encodeURIComponent(slug)}`;
 const listUrl = (slug: string) => `${window.location.origin}/lists/${encodeURIComponent(slug)}`;
 const upsertMeta = (selector: string, attributes: Record<string, string>, content: string) => {
@@ -432,7 +438,7 @@ const Index = () => {
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    const search = term.trim().toLowerCase();
+    const search = sanitizePostgrestSearch(term);
     const { data, error } = await supabase
       .from("menu_items")
       .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")

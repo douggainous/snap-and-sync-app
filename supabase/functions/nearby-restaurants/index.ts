@@ -45,15 +45,23 @@ serve(async (req) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return json({ error: "Authentication required." }, 401);
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) return json({ error: "Backend database is not configured." }, 500);
+
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+    const { data: { user }, error: userError } = await authClient.auth.getUser();
+    if (userError || !user) return json({ error: "Authentication required." }, 401);
+
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) return json({ error: "Invalid location payload.", details: parsed.error.flatten().fieldErrors }, 400);
 
     const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
     if (!apiKey) return json({ error: "Google Maps API key is not configured yet.", needsSecret: "GOOGLE_MAPS_API_KEY" }, 503);
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceRoleKey) return json({ error: "Backend database is not configured." }, 500);
 
     const radiusMeters = Math.min(80467, Math.round(parsed.data.radiusMiles * 1609.34));
     const response = await fetch("https://places.googleapis.com/v1/places:searchNearby", {
@@ -72,7 +80,10 @@ serve(async (req) => {
     });
 
     const data = await response.json();
-    if (!response.ok) return json({ error: "Google Maps lookup failed.", status: response.status, details: data }, response.status);
+    if (!response.ok) {
+      console.error("Google Maps lookup failed", response.status, data);
+      return json({ error: "Google Maps lookup failed. Please try again later." }, response.status >= 500 ? 502 : 400);
+    }
 
     const places: GooglePlace[] = data.places ?? [];
     const rows = places.map((place) => {
@@ -104,9 +115,13 @@ serve(async (req) => {
       .upsert(rows, { onConflict: "google_place_id" })
       .select("id,name,address,city,cuisine,latitude,longitude,phone,website_url,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference");
 
-    if (error) return json({ error: "Could not save nearby restaurants.", details: error.message }, 500);
+    if (error) {
+      console.error("Could not save nearby restaurants", error);
+      return json({ error: "Could not save nearby restaurants." }, 500);
+    }
     return json({ restaurants: saved ?? [] });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Unknown error" }, 500);
+    console.error("nearby-restaurants error", error);
+    return json({ error: "Unexpected error." }, 500);
   }
 });
