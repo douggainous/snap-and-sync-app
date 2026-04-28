@@ -260,8 +260,10 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   };
 
   const googleSignIn = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: `${window.location.origin}/` });
+    if (result.redirected) return;
     if (result.error) toast({ title: "Google sign-in failed", description: result.error.message, variant: "destructive" });
+    else onClose();
   };
 
   return (

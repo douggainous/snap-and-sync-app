@@ -23,6 +23,7 @@ const App = () => (
           <Route path="/cuisine/:slug" element={<Index />} />
           <Route path="/city/:slug" element={<Index />} />
           <Route path="/dish/:slug" element={<Index />} />
+          <Route path="/~oauth/*" element={<Index />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
