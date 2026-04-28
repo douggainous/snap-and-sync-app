@@ -629,7 +629,69 @@ const ExtractionRow = ({ item, onChange }: { item: ExtractedMenuItem; onChange: 
   <div className="rounded-md border bg-background p-3"><label className="mb-2 flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={item.selected} onChange={(event) => onChange({ ...item, selected: event.target.checked })} />Add to searchable catalog</label><div className="grid gap-2 md:grid-cols-3"><Input value={item.name} onChange={(event) => onChange({ ...item, name: event.target.value })} placeholder="Item name" /><Input value={item.price ?? ""} onChange={(event) => onChange({ ...item, price: Number(event.target.value) })} placeholder="Price" type="number" /><Input value={item.section ?? ""} onChange={(event) => onChange({ ...item, section: event.target.value })} placeholder="Menu section" /></div><Textarea className="mt-2" value={item.description ?? ""} onChange={(event) => onChange({ ...item, description: event.target.value })} placeholder="Description" /></div>
 );
 
-const ShareableLists = ({ onProtected }: { onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Build SEO-friendly trails like “Best pork belly dishes in Austin” or “Top fish tacos near me”.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{["Best pork belly bites", "NYC ramen crawl", "Fish tacos near me"].map((list) => <div key={list} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list}</h2><p className="mt-2 text-sm text-muted-foreground">Public list page with favorite menu items, prices, ratings, and directions.</p><Button className="mt-3" variant="outline" onClick={() => onProtected("Sign in to create and share favorites lists.")}><Plus />Create list</Button></div>)}</div></section>;
+const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
+  const { toast } = useToast();
+  const [lists, setLists] = useState<FavoriteList[]>([]);
+  const [title, setTitle] = useState(`Best ${item.name}`.slice(0, 80));
+  const [description, setDescription] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!sessionUser) return;
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+  }, [sessionUser]);
+
+  const addToList = async (list: FavoriteList) => {
+    if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
+    const { error } = await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
+    else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
+  };
+
+  const createList = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to create favorites lists.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before creating a list.", variant: "destructive" });
+    const parsed = listSchema.safeParse({ title, description, is_public: isPublic });
+    if (!parsed.success) return toast({ title: "Check your list", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setLoading(true);
+    const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
+    const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
+    if (!error && list) await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    setLoading(false);
+    if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
+    toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
+    onClose();
+  };
+
+  if (!sessionUser) { onProtected("Sign in to save menu items to shareable favorites lists."); onClose(); return null; }
+  return <div className="fixed inset-0 z-50 flex items-end bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="w-full max-w-lg rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Save menu item</p><h2 className="font-display text-3xl font-black">Add {item.name} to a list</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{lists.map((list) => <Button key={list.id} className="w-full justify-between" variant="outline" onClick={() => addToList(list)}><span>{list.title}</span><span className="text-xs">{list.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createList} className="mt-4 space-y-3 border-t pt-4"><Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} placeholder="List title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public shareable list</label><Button disabled={loading} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create list and save item</Button></form></div></div>;
+};
+
+const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
+  const [list, setList] = useState<FavoriteListDetail | null>(null);
+  useEffect(() => {
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
+      if (!data) return setList(null);
+      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude))").eq("list_id", data.id).order("sort_order");
+      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
+    });
+  }, [slug]);
+  if (!list) return <section className="rounded-lg border bg-card p-5"><h1 className="font-display text-4xl font-black">List not found</h1><p className="text-muted-foreground">This favorites list may be private or unavailable.</p></section>;
+  return <section className="space-y-5"><div className="rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><p className="text-sm font-black text-accent">{list.is_public ? "Public food list" : "Private food list"}</p><h1 className="font-display text-5xl font-black leading-none">{list.title}</h1>{list.description && <p className="mt-3 text-muted-foreground">{list.description}</p>}<Button className="mt-4" variant="outline" onClick={() => navigator.share?.({ title: list.title, url: listUrl(list.slug) }) ?? navigator.clipboard.writeText(listUrl(list.slug))}><Share2 />Share list</Button></div><div className="space-y-4">{list.items.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={onSave} />)}</div></section>;
+};
+
+const ShareableLists = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => {
+  const [lists, setLists] = useState<FavoriteList[]>([]);
+  useEffect(() => {
+    if (!sessionUser) return;
+    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+  }, [sessionUser]);
+  if (!sessionUser) return <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Shareable food lists</h1><p className="mt-2 text-muted-foreground">Save individual dishes into public or private lists.</p><Button className="mt-4" onClick={() => onProtected("Sign in to create and share favorites lists.")}><LogIn />Sign in to save lists</Button></section>;
+  return <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Your food lists</h1><p className="mt-2 text-muted-foreground">Public lists can be shared with friends; private lists stay just for you.</p><div className="mt-4 grid gap-3 md:grid-cols-3">{lists.map((list) => <div key={list.id} className="rounded-md border bg-background p-4"><h2 className="font-display text-xl font-black">{list.title}</h2><p className="mt-1 text-xs font-bold text-accent">{list.is_public ? "Public" : "Private"}</p><p className="mt-2 text-sm text-muted-foreground">{list.description || "Saved menu items, prices, ratings, and directions."}</p>{list.is_public && <Button className="mt-3" variant="outline" asChild><a href={`/lists/${list.slug}`}><Share2 />Open share page</a></Button>}</div>)}</div></section>;
+};
 
 const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => <section className="rounded-lg border bg-card p-5 shadow-[var(--shadow-soft)]"><h1 className="font-display text-4xl font-black">Account</h1>{sessionUser ? <p className="mt-2 text-muted-foreground">Signed in as {sessionUser.email}. Your saved favorites, reviews, lists, and contribution history stay synced.</p> : <><p className="mt-2 text-muted-foreground">Browse, search, take photos, and extract menu items without an account. Sign in only when you want to save something.</p><Button className="mt-4" onClick={() => onProtected("Sign in to save favorites, reviews, lists, and contribution history.")}><LogIn />Sign in</Button></>}</section>;
 
