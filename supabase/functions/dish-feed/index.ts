@@ -340,8 +340,13 @@ serve(async (req) => {
     const actionsByDishId = new Map<string, Set<string>>();
     const trendByDishId = new Map<string, TrendMetric>();
     const sponsorshipByDishId = new Map<string, Sponsorship>();
-    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set() };
+    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set(), profileCuisines: new Map(), profileTags: new Map() };
     if (userId && dishIds.length) {
+      const { data: tasteProfile, error: tasteError } = await supabase.from("user_taste_profiles").select("cuisine_affinity,tag_affinity").eq("user_id", userId).maybeSingle();
+      if (tasteError) console.error("taste profile lookup failed", tasteError);
+      for (const [cuisine, value] of Object.entries((tasteProfile?.cuisine_affinity ?? {}) as Record<string, number>)) userSignals.profileCuisines.set(cuisine.toLowerCase().trim(), Number(value || 0));
+      for (const [tag, value] of Object.entries((tasteProfile?.tag_affinity ?? {}) as Record<string, number>)) userSignals.profileTags.set(tag.toLowerCase().trim(), Number(value || 0));
+
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(120);
       if (error) console.error("saved action lookup failed", error);
       for (const action of (savedActions ?? []) as { dish_id: string; action_type: string; dishes?: { cuisine?: string | null } | null }[]) {
