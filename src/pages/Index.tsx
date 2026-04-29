@@ -1006,6 +1006,41 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   return <section className="max-w-full space-y-3 overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-3xl font-black">Reviews</h2>{rows.length ? rows.map((review) => <article key={review.id} className="max-w-full overflow-hidden rounded-2xl bg-secondary/55 p-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs font-bold text-muted-foreground sm:grid-cols-2 md:grid-cols-4"><span className="min-w-0 truncate">Temp {review.temperature_rating ?? "—"}/5</span><span className="min-w-0 truncate">Spice {review.spiciness_rating ?? "—"}/5</span><span className="min-w-0 truncate">Sweet {review.sweet_savory_rating ?? "—"}/5</span><span className="min-w-0 truncate">Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div>{review.review && <p className="mt-2 text-sm text-muted-foreground">{review.review}</p>}</article>) : <p className="text-sm font-semibold text-muted-foreground">No reviews yet.</p>}</section>;
 };
 
+const RestaurantDishTools = ({ item, sessionUser, onProtected }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void }) => {
+  const { toast } = useToast();
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const [boostScore, setBoostScore] = useState("8");
+  const [budget, setBudget] = useState("");
+  const [saving, setSaving] = useState<"photo" | "boost" | null>(null);
+
+  const submitPhoto = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to add official photos or request dish boosts.");
+    const parsed = officialDishPhotoSchema.safeParse({ image_url: photoUrl, caption });
+    if (!parsed.success) return toast({ title: "Check the photo", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setSaving("photo");
+    const { error } = await restaurantParticipationDb.from("restaurant_official_photos").insert({ user_id: sessionUser.id, restaurant_id: item.restaurants?.id ?? null, dish_id: item.id, image_url: parsed.data.image_url, caption: parsed.data.caption || null });
+    setSaving(null);
+    if (error) return toast({ title: "Photo not submitted", description: error.message, variant: "destructive" });
+    setPhotoUrl(""); setCaption(""); toast({ title: "Official photo submitted", description: "It will be reviewed before appearing publicly." });
+  };
+
+  const requestBoost = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to request a dish boost.");
+    const parsed = boostRequestSchema.safeParse({ requested_boost_score: boostScore, budget_cents: budget });
+    if (!parsed.success) return toast({ title: "Check the boost request", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setSaving("boost");
+    const { error } = await restaurantParticipationDb.from("restaurant_boost_requests").insert({ user_id: sessionUser.id, restaurant_id: item.restaurants?.id ?? null, dish_id: item.id, requested_boost_score: parsed.data.requested_boost_score, budget_cents: parsed.data.budget_cents ?? null });
+    setSaving(null);
+    if (error) return toast({ title: "Boost not requested", description: error.message, variant: "destructive" });
+    setBudget(""); toast({ title: "Boost request sent", description: "Approved boosts stay capped and labeled for trust." });
+  };
+
+  return <section className="rounded-3xl glass-surface p-4"><p className="soft-chip text-primary"><Megaphone className="size-4" />Restaurant tools</p><h2 className="mt-2 font-display text-2xl font-black">Participate lightly</h2><div className="mt-4 grid gap-3"><form onSubmit={submitPhoto} className="space-y-2 rounded-2xl bg-secondary/60 p-3"><Input className="h-11 rounded-full bg-card" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} placeholder="Official photo URL" /><Input className="h-11 rounded-full bg-card" value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={180} placeholder="Caption optional" /><Button className="h-10 w-full rounded-full" disabled={saving === "photo"}>{saving === "photo" ? <Loader2 className="animate-spin" /> : <CameraIcon />}Submit photo</Button></form><form onSubmit={requestBoost} className="space-y-2 rounded-2xl bg-secondary/60 p-3"><Input className="h-11 rounded-full bg-card" type="number" min="1" max="25" value={boostScore} onChange={(event) => setBoostScore(event.target.value)} placeholder="Boost score 1–25" /><Input className="h-11 rounded-full bg-card" type="number" min="0" step="0.01" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="Budget optional" /><Button className="h-10 w-full rounded-full" disabled={saving === "boost"}>{saving === "boost" ? <Loader2 className="animate-spin" /> : <Sparkles />}Request boost</Button></form></div></section>;
+};
+
 const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
   const { toast } = useToast();
   const [collections, setCollections] = useState<Collection[]>([]);
