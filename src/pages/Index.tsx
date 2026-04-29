@@ -143,11 +143,6 @@ const photoReviewSchema = reviewSchema.extend({
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DISCOVERY_PAGE_SIZE = 10;
 
-const sampleReviews = [
-  { author: "Maya", rating: 5, text: "The shell eats like a bao but carries the crunch of a taco. The pork belly is the reason to go." },
-  { author: "Leo", rating: 4.5, text: "Great heat, rich fat, and still balanced. Order two if you are hungry." },
-];
-
 const navItems = [
   { id: "discover" as View, label: "Discover", icon: Compass },
   { id: "scan" as View, label: "Scan", icon: CameraIcon },
