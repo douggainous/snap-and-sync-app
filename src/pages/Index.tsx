@@ -814,7 +814,8 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null } });
+    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
     setSaving(false);
     if (error || data?.error) return toast({ title: "Review not published", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
