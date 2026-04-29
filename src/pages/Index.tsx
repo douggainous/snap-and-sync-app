@@ -376,6 +376,10 @@ const Index = () => {
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
   useEffect(() => {
+    if (selectedSlug || listSlug) feedRequestRef.current += 1;
+  }, [selectedSlug, listSlug]);
+
+  useEffect(() => {
     const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
     const description = selectedItem
       ? `Find ${selectedItem.name} at ${selectedItem.restaurants?.name}. See item ratings, reviews, price, distance, directions, and photos.`
@@ -551,7 +555,6 @@ const Index = () => {
     if (cuisineFilter !== "all") params.set("cuisine", cuisineFilter);
     if (minRating !== "0") params.set("rating", minRating);
     navigate(`/search?${params.toString()}`);
-    void loadItems(query, false, feedMode, userLocation);
   };
 
   const applySearchSuggestion = (value: string) => {
@@ -587,7 +590,6 @@ const Index = () => {
       const locationPoint = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setUserLocation(locationPoint);
       setFeedMode("nearby");
-      void loadItems(query, false, "nearby", locationPoint);
       void loadNearbyRestaurants(locationPoint);
     },
     () => toast({ title: "Location unavailable", description: "You can still browse by city and restaurant.", variant: "destructive" }),
