@@ -242,15 +242,21 @@ serve(async (req) => {
       if (error) console.error("photo feed lookup failed", error);
 
       const photoRows = (photos ?? []) as { dish_id: string; image_url?: string | null; storage_path?: string | null; storage_bucket?: string | null }[];
-      const signedPaths = photoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!)
+      const firstPhotoRows: typeof photoRows = [];
+      const seenPhotoDishIds = new Set<string>();
+      for (const photo of photoRows) {
+        if (seenPhotoDishIds.has(photo.dish_id)) continue;
+        seenPhotoDishIds.add(photo.dish_id);
+        firstPhotoRows.push(photo);
+      }
+      const signedPaths = firstPhotoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!)
       const signedUrlByPath = new Map<string, string>();
       if (signedPaths.length) {
         const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, IMAGE_SIGNED_URL_TTL_SECONDS);
         for (const item of signed.data ?? []) if (item.path && item.signedUrl) signedUrlByPath.set(item.path, item.signedUrl);
       }
 
-      for (const photo of photoRows) {
-        if (photosByDishId.has(photo.dish_id)) continue;
+      for (const photo of firstPhotoRows) {
         photosByDishId.set(photo.dish_id, {
           ...photo,
           image_url: photo.storage_path ? signedUrlByPath.get(photo.storage_path) ?? photo.image_url : photo.image_url,
@@ -333,7 +339,7 @@ serve(async (req) => {
           ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
           : scoreParts.score;
       const photo = photosByDishId.get(dish.id);
-      const trendStatus = trend?.status === "viral" || scoreParts.trendingScore >= 80 ? "viral" : trend?.status === "trending" || scoreParts.trendingScore >= 45 ? "trending" : "normal";
+      const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
       return {
         ...dish,
