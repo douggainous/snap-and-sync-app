@@ -10,9 +10,10 @@ const corsHeaders = {
 const BodySchema = z.object({
   dishName: z.string().trim().min(2).max(120),
   restaurantName: z.string().trim().max(120).optional().nullable(),
-  imageBase64: z.string().min(100).max(12_000_000),
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  imageBase64: z.string().min(100).max(12_000_000).optional(),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
   fileName: z.string().trim().max(160).optional(),
+  images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
   rating: z.number().min(1).max(5).optional(),
   review: z.string().trim().max(1200).optional().nullable(),
   pricePaid: z.number().min(0).max(10000).optional().nullable(),
@@ -24,6 +25,8 @@ const BodySchema = z.object({
     sweetSavory: z.number().int().min(1).max(5).optional(),
     flavorIntensity: z.number().int().min(1).max(5).optional(),
   }).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.images?.length && (!value.imageBase64 || !value.mimeType)) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "At least one image is required.", path: ["images"] });
 });
 
 function json(data: unknown, status = 200) {
@@ -131,30 +134,25 @@ serve(async (req) => {
       return json({ error: "Could not save dish." }, 500);
     }
 
-    const binary = Uint8Array.from(atob(input.imageBase64), (char) => char.charCodeAt(0));
-    if (binary.byteLength > 8 * 1024 * 1024) return json({ error: "Image must be 8MB or smaller." }, 413);
-
-    const path = `${user.id}/dishes/${dish.id}/${Date.now()}-${slugify(input.fileName ?? input.dishName)}.${extFor(input.mimeType)}`;
-    const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: input.mimeType, cacheControl: "31536000", upsert: false });
-    if (upload.error) {
-      console.error("Photo upload failed", upload.error);
-      return json({ error: "Could not upload photo." }, 500);
+    const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
+    const ai = await recognizeDish(images[0].imageBase64, images[0].mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
+    const photos = [];
+    for (const [index, image] of images.entries()) {
+      const binary = Uint8Array.from(atob(image.imageBase64), (char) => char.charCodeAt(0));
+      if (binary.byteLength > 8 * 1024 * 1024) return json({ error: "Each image must be 8MB or smaller." }, 413);
+      const path = `${user.id}/dishes/${dish.id}/${Date.now()}-${index}-${slugify(image.fileName ?? input.dishName)}.${extFor(image.mimeType)}`;
+      const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
+      if (upload.error) return json({ error: "Could not upload photo." }, 500);
+      const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
+      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, ai_dish_name: index === 0 ? ai.dishName : null, ai_tags: index === 0 ? ai.tags : [], ai_confidence: index === 0 ? ai.confidence : null, ai_status: index === 0 ? ai.status : "not_requested", ai_error: index === 0 ? ai.error : null }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error").single();
+      if (photoError) {
+        await supabase.storage.from("dish-photos").remove([path]);
+        return json({ error: "Could not save photo record." }, 500);
+      }
+      photos.push(photo);
     }
 
-    const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
-    const ai = await recognizeDish(input.imageBase64, input.mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
-    const { data: photo, error: photoError } = await supabase
-      .from("photos")
-      .insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo`, is_public: true, ai_dish_name: ai.dishName, ai_tags: ai.tags, ai_confidence: ai.confidence, ai_status: ai.status, ai_error: ai.error })
-      .select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error")
-      .single();
-    if (photoError) {
-      console.error("Photo record failed", photoError);
-      await supabase.storage.from("dish-photos").remove([path]);
-      return json({ error: "Could not save photo record." }, 500);
-    }
-
-    await supabase.from("dishes").update({ cover_photo_id: photo.id }).eq("id", dish.id);
+    await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
 
     let rating = null;
     let review = null;
