@@ -99,12 +99,17 @@ type UserSignals = {
 type TrendMetric = {
   dish_id: string;
   recent_save_count: number;
+  recent_favorite_count?: number;
   recent_rating_count: number;
+  recent_review_count?: number;
   recent_share_count: number;
   save_velocity: number;
+  favorite_velocity?: number;
   rating_velocity: number;
+  review_velocity?: number;
   share_velocity: number;
   spike_score: number;
+  location_spike_score?: number;
   trend_score: number;
   status: string;
   is_hot_nearby: boolean;
@@ -150,7 +155,7 @@ function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, 
   const qualityScore = clamp((rating / 5) * 72 * ratingConfidence + Math.min(28, Math.log1p(ratingCount) * 10));
   const engagementTotal = Number(dish.favorite_count ?? 0) * 3.4 + Number(dish.want_to_try_count ?? 0) * 2.2 + Number(dish.save_count ?? 0) * 1.5 + Number(dish.like_count ?? 0) + Number(dish.review_count ?? 0) * 1.4 + Number(dish.photo_count ?? 0) * 1.1 + ratingCount * 1.8;
   const popularityScore = clamp(Math.log1p(engagementTotal) * 18);
-  const persistedVelocity = Number(trend?.trend_score ?? 0) * 1.15 + Number(trend?.spike_score ?? 0) * 1.8 + Number(trend?.recent_rating_count ?? 0) * 2.2 + Number(trend?.recent_save_count ?? 0) * 1.8 + Number(trend?.recent_share_count ?? 0) * 2.8 + Math.max(0, Number(trend?.rating_velocity ?? 0)) * 2.4 + Math.max(0, Number(trend?.save_velocity ?? 0)) * 2;
+  const persistedVelocity = Number(trend?.trend_score ?? 0) * 1.15 + Number(trend?.spike_score ?? 0) * 1.8 + Number(trend?.location_spike_score ?? 0) * 0.8 + Number(trend?.recent_rating_count ?? 0) * 2.2 + Number(trend?.recent_review_count ?? 0) * 2 + Number(trend?.recent_save_count ?? 0) * 1.8 + Number(trend?.recent_favorite_count ?? 0) * 3 + Number(trend?.recent_share_count ?? 0) * 2.8 + Math.max(0, Number(trend?.rating_velocity ?? 0)) * 2.4 + Math.max(0, Number(trend?.review_velocity ?? 0)) * 2 + Math.max(0, Number(trend?.save_velocity ?? 0)) * 2 + Math.max(0, Number(trend?.favorite_velocity ?? 0)) * 3;
   const recentVelocity = recent.ratings * 2.4 + recent.favorites * 3 + recent.wantToTry * 2.2 + recent.saves * 1.4;
   const velocityFreshness = Math.max(0, 1 - ageDays(recent.lastEventAt) / VELOCITY_WINDOW_DAYS);
   const statusBoost = trend?.status === "viral" ? 24 : trend?.status === "trending" ? 12 : 0;
