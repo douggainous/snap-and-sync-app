@@ -372,6 +372,14 @@ serve(async (req) => {
     else if (input.sort === "recent") ranked.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     else ranked.sort((a, b) => b.feed_score - a.feed_score);
 
+    if (input.offset === 0) {
+      const sponsorIndex = ranked.findIndex((dish) => dish.is_sponsored);
+      if (sponsorIndex > 3 && sponsorIndex > -1) {
+        const [sponsored] = ranked.splice(sponsorIndex, 1);
+        ranked.splice(Math.min(3, ranked.length), 0, sponsored);
+      }
+    }
+
     const page = input.sort === "nearby" || origin ? ranked.slice(input.offset, input.offset + input.limit) : ranked;
     return json({ items: page, nextOffset: input.offset + page.length, hasMore: page.length === input.limit, query: rawSearch, sort: input.sort });
   } catch (error) {
