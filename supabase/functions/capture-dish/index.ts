@@ -186,9 +186,10 @@ serve(async (req) => {
       }
     }
 
-    const dishMatch = input.forceNewDish ? null : await findDishMatch(supabase, { dishName: input.dishName, tags: input.tags, restaurantId, imageHash: firstImageHash });
+    const dishMatch = await findDishMatch(supabase, { dishName: input.dishName, tags: input.tags, restaurantId, imageHash: firstImageHash });
+    const shouldUseMatch = Boolean(dishMatch && !input.forceNewDish);
     let dish: { id: string; name: string; slug: string; restaurant_id: string | null; created_at?: string | null };
-    if (dishMatch) {
+    if (shouldUseMatch && dishMatch) {
       const { data: matchedDish, error } = await supabase.from("dishes").select("id,name,slug,restaurant_id,created_at").eq("id", dishMatch.dishId).single();
       if (error || !matchedDish) return json({ error: "Could not attach to matched dish." }, 500);
       dish = matchedDish;
@@ -204,6 +205,7 @@ serve(async (req) => {
         return json({ error: "Could not save dish." }, 500);
       }
       dish = newDish;
+      if (input.forceNewDish && dishMatch) await supabase.from("dish_match_overrides").insert({ user_id: user.id, photo_id: crypto.randomUUID(), original_dish_id: dishMatch.dishId, override_dish_id: dish.id, reason: "User saved as a separate dish during capture." });
     }
 
     const photos = [];
@@ -216,7 +218,7 @@ serve(async (req) => {
       const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
       if (upload.error) return json({ error: "Could not upload photo." }, 500);
       const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
-      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested", matched_existing_dish_id: dishMatch?.dishId ?? null, dish_match_status: dishMatch ? "matched" : "created_new", dish_match_score: dishMatch?.score ?? null, dish_match_reasons: dishMatch?.reasons ?? [] }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients,dish_match_status,dish_match_score,dish_match_reasons,matched_existing_dish_id").single();
+      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested", matched_existing_dish_id: dishMatch?.dishId ?? null, dish_match_status: shouldUseMatch ? "matched" : input.forceNewDish && dishMatch ? "user_override" : "created_new", dish_match_score: dishMatch?.score ?? null, dish_match_reasons: dishMatch?.reasons ?? [] }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients,dish_match_status,dish_match_score,dish_match_reasons,matched_existing_dish_id").single();
       if (photoError) {
         await supabase.storage.from("dish-photos").remove([path]);
         return json({ error: "Could not save photo record." }, 500);
