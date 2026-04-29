@@ -201,7 +201,7 @@ const convertHeicFile = async (file: File) => {
 };
 const optimizeImageFile = async (file: File) => {
   const sourceFile = await convertHeicFile(file);
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file); });
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(sourceFile); });
   const maxSide = 1600;
   const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
