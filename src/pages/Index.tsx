@@ -158,6 +158,9 @@ const navItems = [
   { id: "profile" as View, label: "Account", icon: User },
 ];
 
+const suggestedSearches = ["Best steak near me", "Spicy ramen", "Crispy tacos", "Sushi rolls"];
+const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha dessert"];
+
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
@@ -291,6 +294,11 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
       </div>
     </article>
   );
+};
+
+const SearchDishCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+  const miles = distanceMiles(userLocation, item.restaurants);
+  return <article className="group overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition active:scale-[0.98]"><a href={`/items/${item.slug}`} className="block"><div className="relative aspect-[4/5] overflow-hidden bg-secondary">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-3 top-3 soft-chip text-accent"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span><button type="button" className={cn("absolute right-3 top-3 thumb-action size-10", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><div className="absolute inset-x-0 bottom-0 p-3"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/72">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
 };
 
 const ItemCard = FeedItemCard;
