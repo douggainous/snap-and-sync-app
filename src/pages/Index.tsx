@@ -157,13 +157,6 @@ const navItems = [
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
-const filterDemoItems = (term: string) => {
-  const search = term.trim().toLowerCase();
-  if (!search) return sampleItems;
-  const filtered = sampleItems.filter((item) => `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.cuisine ?? ""} ${item.restaurants?.name ?? ""} ${item.restaurants?.city ?? ""}`.toLowerCase().includes(search));
-  return filtered.length ? filtered : sampleItems;
-};
-const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
 const sanitizePostgrestSearch = (value: string) => value
   .trim()
   .toLowerCase()
