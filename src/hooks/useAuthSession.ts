@@ -29,10 +29,10 @@ const ensureUserRecord = async (user: User) => {
 
 const deferProfileSync = (user: User) => {
   const run = () => void ensureUserRecord(user).catch((error) => console.warn("Profile sync failed", error));
-  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 3000 });
+  if (typeof globalThis !== "undefined" && "requestIdleCallback" in globalThis) {
+    globalThis.requestIdleCallback(run, { timeout: 3000 });
   } else {
-    window.setTimeout(run, 0);
+    setTimeout(run, 0);
   }
 };
 
