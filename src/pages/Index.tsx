@@ -35,7 +35,7 @@ import demoPlatedNoodles from "@/assets/demo-plated-noodles.jpg";
 import demoCrispyTacos from "@/assets/demo-crispy-tacos.jpg";
 import demoBistroPlate from "@/assets/demo-bistro-plate.jpg";
 import demoDessertGelato from "@/assets/demo-dessert-gelato.jpg";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,12 +48,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 type View = "discover" | "scan" | "favorites" | "profile";
-type UserSession = { id: string; email?: string } | null;
+type UserSession = AppUser | null;
 type Restaurant = {
   id?: string;
   name: string;
