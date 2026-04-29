@@ -840,7 +840,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
   const addToList = async (list: FavoriteList) => {
     if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
-    const { error } = await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id }, { onConflict: "list_id,dish_id" });
     if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
     else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
   };
@@ -854,7 +854,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
     setLoading(true);
     const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
     const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
-    if (!error && list) await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id }, { onConflict: "list_id,dish_id" });
     setLoading(false);
     if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
     toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
@@ -870,8 +870,8 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
   useEffect(() => {
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
       if (!data) return setList(null);
-      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference))").eq("list_id", data.id).order("sort_order");
-      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
+      const { data: rows } = await supabase.from("favorite_list_items").select("dishes(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference))").eq("list_id", data.id).order("sort_order");
+      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.dishes).filter(Boolean) as unknown as MenuItem[]) });
     });
   }, [slug]);
   if (!list) return <section className="rounded-lg border bg-card p-5"><h1 className="font-display text-4xl font-black">List not found</h1><p className="text-muted-foreground">This favorites list may be private or unavailable.</p></section>;
