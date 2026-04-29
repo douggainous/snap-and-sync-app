@@ -472,6 +472,19 @@ const Index = () => {
     void loadItems(query, false, feedMode, userLocation);
   };
 
+  useEffect(() => {
+    if (view !== "discover" || selectedItem || listSlug) return;
+    const handle = window.setTimeout(() => {
+      void loadItems(query, false, feedMode, userLocation);
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [query, searchSort, cuisineFilter, minRating]);
+
+  const applySearchSuggestion = (value: string) => {
+    setQuery(value);
+    navigate(`/search?q=${encodeURIComponent(value)}`);
+  };
+
   const loadNearbyRestaurants = async (locationPoint: { latitude: number; longitude: number }) => {
     setLoadingNearby(true);
     const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
