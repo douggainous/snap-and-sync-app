@@ -101,6 +101,8 @@ type MenuItem = {
   trend_status?: "normal" | "trending" | "viral";
   trend_labels?: string[];
   trend_metrics?: { trend_score?: number; spike_score?: number; recent_share_count?: number; recent_save_count?: number; recent_rating_count?: number } | null;
+  is_sponsored?: boolean;
+  sponsorship?: { label?: string; sponsor_name?: string | null; boost_score?: number } | null;
 };
 type MenuItemReview = {
   id: string;
@@ -199,6 +201,8 @@ const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, tre
     photo_count: Number(row.photo_count ?? 0),
     want_to_try_count: Number(row.want_to_try_count ?? 0),
     favorite_count: Number(row.favorite_count ?? 0),
+    is_sponsored: Boolean(row.is_sponsored),
+    sponsorship: row.sponsorship && typeof row.sponsorship === "object" ? row.sponsorship as MenuItem["sponsorship"] : null,
     trend_status: trend?.status === "viral" || trend?.status === "trending" ? trend.status : "normal",
     trend_labels: incomingLabels.length ? incomingLabels : [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
     trend_metrics: trend ?? null,
