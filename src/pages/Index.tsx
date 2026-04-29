@@ -263,6 +263,18 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+const optimizeImageFile = async (file: File) => {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file); });
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(image.src);
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Image optimization failed")), "image/jpeg", 0.86));
+  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+};
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
 const AuthModal = ({ onClose }: { onClose: () => void }) => {
