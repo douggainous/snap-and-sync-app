@@ -24,6 +24,7 @@ const BodySchema = z.discriminatedUnion("type", [
     }).optional(),
   }),
   z.object({ type: z.literal("toggle_action"), dishId: z.string().uuid(), action: z.enum(["want_to_try", "favorite"]), enabled: z.boolean() }),
+  z.object({ type: z.literal("share"), dishId: z.string().uuid(), channel: z.string().trim().min(1).max(40).optional().default("native") }),
 ]);
 
 function json(data: unknown, status = 200) {
@@ -108,8 +109,19 @@ serve(async (req) => {
         if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user.id });
       }
 
+      await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
       return json({ rating, review, dish: updatedDish });
+    }
+
+    if (input.type === "share") {
+      const { error } = await supabase.from("dish_share_events").insert({ dish_id: input.dishId, user_id: user.id, share_channel: input.channel });
+      if (error) {
+        console.error("Share event insert failed", error);
+        return json({ error: "Could not record share." }, 500);
+      }
+      const { data: trend } = await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
+      return json({ shared: true, trend });
     }
 
     if (input.enabled) {
@@ -133,6 +145,7 @@ serve(async (req) => {
       }
     }
 
+    await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
     const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
     return json({ action: input.action, enabled: input.enabled, dish: updatedDish });
   } catch (error) {
