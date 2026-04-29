@@ -93,6 +93,8 @@ type UserSignals = {
   savedDishIds: Set<string>;
 };
 
+type Sponsorship = { dish_id: string; label: string; sponsor_name?: string | null; boost_score: number; target_cuisine?: string | null; target_city?: string | null };
+
 const intentWords = /\b(best|top|great|popular|trending|near|nearby|me|around|dish|dishes|food|foods|restaurant|restaurants)\b/gi;
 
 function json(data: unknown, status = 200) {
@@ -149,6 +151,16 @@ function preferenceBoost(dish: DishRow, userSignals: UserSignals) {
   const stated = userSignals.preferredCuisines.has(cuisine) ? 16 : 0;
   const saved = Math.min(14, (userSignals.savedCuisines.get(cuisine) ?? 0) * 4);
   return stated + saved + ratingAffinity + (userSignals.savedDishIds.has(dish.id) ? -8 : 0);
+}
+
+function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null, terms = "") {
+  if (!sponsor) return false;
+  const cuisine = (dish.cuisine ?? restaurant?.cuisine ?? "").toLowerCase();
+  const city = (restaurant?.city ?? "").toLowerCase();
+  const text = `${dish.name} ${dish.description ?? ""} ${cuisine} ${restaurant?.name ?? ""}`.toLowerCase();
+  return (!sponsor.target_cuisine || cuisine.includes(sponsor.target_cuisine.toLowerCase()))
+    && (!sponsor.target_city || city.includes(sponsor.target_city.toLowerCase()))
+    && (!terms || text.includes(terms) || terms.split(" ").some((term) => term.length > 2 && text.includes(term)));
 }
 
 serve(async (req) => {
