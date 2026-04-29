@@ -8,6 +8,9 @@ const corsHeaders = {
 };
 
 const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+const LOW_QUALITY_RATING_FLOOR = 3.2;
+const BOOST_DECAY_DAYS = 14;
+const MAX_BOOST_MODIFIER = 7;
 
 const BodySchema = z.object({
   query: z.string().trim().max(120).optional().default(""),
@@ -63,6 +66,9 @@ type DishRow = {
   favorite_count: number;
   like_count: number;
   trending_score: number;
+  boost_score?: number | null;
+  boost_starts_at?: string | null;
+  boost_ends_at?: string | null;
   created_at: string;
   cover_photo_id?: string | null;
 };
@@ -126,6 +132,26 @@ function recencyBoost(createdAt: string) {
 
 function clamp(value: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, value));
+}
+
+function ageDays(date?: string | null) {
+  if (!date) return Number.POSITIVE_INFINITY;
+  return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
+}
+
+function dishBoostModifier(dish: DishRow, engagement: number) {
+  const rawBoost = Number(dish.boost_score ?? 0);
+  if (rawBoost <= 0) return 0;
+  const now = Date.now();
+  const startsAt = dish.boost_starts_at ? new Date(dish.boost_starts_at).getTime() : now;
+  const endsAt = dish.boost_ends_at ? new Date(dish.boost_ends_at).getTime() : null;
+  if (startsAt > now || (endsAt && endsAt <= now)) return 0;
+
+  const rating = Number(dish.aggregate_rating ?? 0);
+  const ratingCount = Number(dish.rating_count ?? 0);
+  const trustMultiplier = ratingCount < 3 ? 0.45 : rating < LOW_QUALITY_RATING_FLOOR ? 0.25 : engagement >= 62 ? 1 : 0.65;
+  const decayMultiplier = Math.max(0.2, 1 - ageDays(dish.boost_starts_at) / BOOST_DECAY_DAYS);
+  return Math.min(MAX_BOOST_MODIFIER, rawBoost * 0.36 * trustMultiplier * decayMultiplier);
 }
 
 function engagementScore(dish: DishRow) {
@@ -204,7 +230,7 @@ serve(async (req) => {
 
     let query = supabase
       .from("dishes")
-      .select("id,restaurant_id,name,slug,description,section,cuisine,typical_price,price_min,price_max,currency,aggregate_rating,rating_count,review_count,photo_count,save_count,want_to_try_count,favorite_count,like_count,trending_score,created_at,cover_photo_id")
+        .select("id,restaurant_id,name,slug,description,section,cuisine,typical_price,price_min,price_max,currency,aggregate_rating,rating_count,review_count,photo_count,save_count,want_to_try_count,favorite_count,like_count,trending_score,boost_score,boost_starts_at,boost_ends_at,created_at,cover_photo_id")
       .eq("is_published", true);
 
     if (terms) {
@@ -338,8 +364,9 @@ serve(async (req) => {
       const engagement = engagementScore(dish);
       const velocity = trendBoost(trend);
       const personalization = preferenceBoost(dish, userSignals);
+      const nativeBoost = dishBoostModifier(dish, engagement);
       const sponsorBoost = isRelevantSponsor ? Math.min(10, Number(sponsor?.boost_score ?? 0)) : 0;
-      const score = nameHit + cuisineHit + restaurantHit + engagement + velocity + personalization + sponsorBoost - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const score = nameHit + cuisineHit + restaurantHit + engagement + velocity + personalization + nativeBoost + sponsorBoost - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
@@ -357,6 +384,7 @@ serve(async (req) => {
           engagement: Number(engagement.toFixed(2)),
           velocity: Number(velocity.toFixed(2)),
           personalization: Number(personalization.toFixed(2)),
+          boost: Number(nativeBoost.toFixed(2)),
         },
         trend_status: trendStatus,
         trend_labels: isRelevantSponsor ? [sponsor?.label || "Sponsored", ...trendLabels] : trendLabels,
