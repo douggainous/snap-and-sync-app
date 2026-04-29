@@ -126,6 +126,7 @@ type FavoriteList = {
   slug: string;
   is_public: boolean;
   cover_image_url?: string | null;
+  item_count?: number;
 };
 type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
 type DishListItemInsert = { list_id: string; dish_id: string };
