@@ -270,11 +270,6 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const shareItem = async () => {
-    const url = menuItemUrl(item.slug);
-    if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
-    else await navigator.clipboard.writeText(url);
-  };
 
   return (
     <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:min-h-[760px] md:rounded-[32px]">
