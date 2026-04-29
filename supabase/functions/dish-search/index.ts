@@ -116,9 +116,17 @@ serve(async (req) => {
     const input = parsed.data;
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     if (!supabaseUrl || !serviceRoleKey) return json({ error: "Backend is not configured." }, 500);
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    let userId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader && supabaseAnonKey) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: { user } } = await authClient.auth.getUser();
+      userId = user?.id ?? null;
+    }
     const rawSearch = normalizeQuery(input.query);
     const terms = searchableTerms(rawSearch);
     const origin = input.latitude != null && input.longitude != null ? { latitude: input.latitude, longitude: input.longitude } : null;
@@ -217,6 +225,13 @@ serve(async (req) => {
       }
     }
 
+    const actionsByDishId = new Map<string, Set<string>>();
+    if (userId && dishIds.length) {
+      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
+      if (error) console.error("saved action lookup failed", error);
+      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+    }
+
     let ranked = dishes.map((dish) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
       const distance = origin ? distanceMiles(origin, restaurant) : null;
@@ -232,6 +247,8 @@ serve(async (req) => {
         dietary_tags: [],
         cover_image_url: photo?.image_url ?? null,
         restaurants: restaurant,
+        user_want_to_try: actionsByDishId.get(dish.id)?.has("want_to_try") ?? false,
+        user_favorite: actionsByDishId.get(dish.id)?.has("favorite") ?? false,
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
       };
