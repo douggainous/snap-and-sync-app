@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useEffect, useMemo, 
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
+import heic2any from "heic2any";
 import { z } from "zod";
 import {
   Bookmark,
@@ -191,7 +192,15 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+const convertHeicFile = async (file: File) => {
+  if (!isHeicFile(file)) return file;
+  const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.86 });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+};
 const optimizeImageFile = async (file: File) => {
+  const sourceFile = await convertHeicFile(file);
   const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file); });
   const maxSide = 1600;
   const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
@@ -201,7 +210,7 @@ const optimizeImageFile = async (file: File) => {
   canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(image.src);
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Image optimization failed")), "image/jpeg", 0.86));
-  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+  return new File([blob], `${slugify(sourceFile.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
 };
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
