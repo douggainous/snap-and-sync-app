@@ -149,6 +149,36 @@ export type Database = {
         }
         Relationships: []
       }
+      dish_match_overrides: {
+        Row: {
+          created_at: string
+          id: string
+          original_dish_id: string
+          override_dish_id: string
+          photo_id: string
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_dish_id: string
+          override_dish_id: string
+          photo_id: string
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_dish_id?: string
+          override_dish_id?: string
+          photo_id?: string
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       dish_share_events: {
         Row: {
           created_at: string
@@ -1006,11 +1036,15 @@ export type Database = {
           alt_text: string | null
           created_at: string
           dish_id: string
+          dish_match_reasons: string[]
+          dish_match_score: number | null
+          dish_match_status: string
           height: number | null
           id: string
           image_hash: string | null
           image_url: string | null
           is_public: boolean
+          matched_existing_dish_id: string | null
           review_id: string | null
           storage_bucket: string
           storage_path: string | null
@@ -1029,11 +1063,15 @@ export type Database = {
           alt_text?: string | null
           created_at?: string
           dish_id: string
+          dish_match_reasons?: string[]
+          dish_match_score?: number | null
+          dish_match_status?: string
           height?: number | null
           id?: string
           image_hash?: string | null
           image_url?: string | null
           is_public?: boolean
+          matched_existing_dish_id?: string | null
           review_id?: string | null
           storage_bucket?: string
           storage_path?: string | null
@@ -1052,11 +1090,15 @@ export type Database = {
           alt_text?: string | null
           created_at?: string
           dish_id?: string
+          dish_match_reasons?: string[]
+          dish_match_score?: number | null
+          dish_match_status?: string
           height?: number | null
           id?: string
           image_hash?: string | null
           image_url?: string | null
           is_public?: boolean
+          matched_existing_dish_id?: string | null
           review_id?: string | null
           storage_bucket?: string
           storage_path?: string | null
