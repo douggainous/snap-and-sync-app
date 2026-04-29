@@ -319,6 +319,7 @@ const Index = () => {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const feedRequestRef = useRef(0);
   const itemsLengthRef = useRef(0);
+  const guestFeedPromptShownRef = useRef(false);
   const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -488,6 +489,20 @@ const Index = () => {
     observer.observe(node);
     return () => observer.disconnect();
   }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation]);
+
+  useEffect(() => {
+    if (sessionUser || selectedSlug || listSlug || view !== "discover" || guestFeedPromptShownRef.current || items.length < 4) return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries[0]?.isIntersecting || guestFeedPromptShownRef.current) return;
+      guestFeedPromptShownRef.current = true;
+      setAuthPrompt("Save dishes you want to try");
+      observer.disconnect();
+    }, { rootMargin: "120px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [sessionUser, selectedSlug, listSlug, view, items.length]);
 
   useEffect(() => {
     if (!selectedSlug || selectedItem) return;
