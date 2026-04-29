@@ -1,0 +1,2 @@
+REVOKE EXECUTE ON FUNCTION public.refresh_dish_trend_metrics(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.refresh_dish_trend_metrics_from_row() FROM PUBLIC, anon, authenticated;
