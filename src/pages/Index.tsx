@@ -505,12 +505,12 @@ const Index = () => {
     setLoading(true);
     setFeedError(null);
     withTimeout(
-      supabase
+      Promise.resolve(supabase
         .from("dishes")
         .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
         .eq("slug", decodeURIComponent(selectedSlug))
         .eq("is_published", true)
-        .maybeSingle(),
+        .maybeSingle()),
       8000,
       "Dish detail",
     ).then(async ({ data, error }) => {
