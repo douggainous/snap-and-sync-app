@@ -17,6 +17,7 @@ const BodySchema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]).optional(),
   fileName: z.string().trim().max(160).optional(),
   images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
+  forceNewDish: z.boolean().default(false),
   rating: z.number().min(1).max(5).optional(),
   review: z.string().trim().max(1200).optional().nullable(),
   pricePaid: z.number().min(0).max(10000).optional().nullable(),
@@ -40,6 +41,15 @@ const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
+const normalizeName = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+const tokenSet = (value: string) => new Set(normalizeName(value).split(" ").filter((token) => token.length > 1));
+const jaccard = (a: Set<string>, b: Set<string>) => {
+  const union = new Set([...a, ...b]);
+  if (!union.size) return 0;
+  let intersection = 0;
+  for (const token of a) if (b.has(token)) intersection += 1;
+  return intersection / union.size;
+};
 const sha256Hex = async (bytes: Uint8Array) => {
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -76,6 +86,46 @@ async function recognizeDish(imageBase64: string, mimeType: string, context: { d
   const parsed = JSON.parse(toolArgs) as { dishName?: string; cuisine?: string; tags?: string[]; ingredients?: string[]; confidence?: number };
   const confidence = typeof parsed.confidence === "number" ? parsed.confidence : null;
   return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, cuisine: parsed.cuisine?.trim().slice(0, 80) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), ingredients: [...new Set((parsed.ingredients ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence, confidenceLevel: confidenceLevel(confidence), rawResult: parsed, error: null };
+}
+
+async function findDishMatch(supabase: ReturnType<typeof createClient>, input: { dishName: string; tags: string[]; restaurantId: string | null; imageHash: string | null }) {
+  const inputName = normalizeName(input.dishName);
+  const inputTokens = tokenSet(input.dishName);
+  const inputTags = new Set(input.tags.map(cleanTag).filter(Boolean));
+  const candidates = new Map<string, { id: string; name: string; restaurant_id: string | null; aggregate_rating?: number | null; rating_count?: number | null; tags: string[]; imageExact: boolean }>();
+
+  if (input.imageHash) {
+    const { data } = await supabase.from("photos").select("dish_id,dishes(id,name,restaurant_id,aggregate_rating,rating_count,is_published)").eq("image_hash", input.imageHash).limit(6);
+    for (const row of data ?? []) {
+      const dish = Array.isArray(row.dishes) ? row.dishes[0] : row.dishes;
+      if (dish?.id && dish.is_published) candidates.set(dish.id, { id: dish.id, name: dish.name, restaurant_id: dish.restaurant_id, aggregate_rating: dish.aggregate_rating, rating_count: dish.rating_count, tags: [], imageExact: true });
+    }
+  }
+
+  let query = supabase.from("dishes").select("id,name,restaurant_id,aggregate_rating,rating_count,dish_tags(tags(name))").eq("is_published", true).limit(18);
+  if (input.restaurantId) query = query.eq("restaurant_id", input.restaurantId);
+  else query = query.ilike("normalized_name", `%${inputName.slice(0, 48)}%`);
+  const { data: nameRows } = await query;
+  for (const row of nameRows ?? []) {
+    const tags = ((row.dish_tags ?? []) as Array<{ tags?: { name?: string } | null }>).map((item) => item.tags?.name).filter(Boolean) as string[];
+    const existing = candidates.get(row.id);
+    candidates.set(row.id, { id: row.id, name: row.name, restaurant_id: row.restaurant_id, aggregate_rating: row.aggregate_rating, rating_count: row.rating_count, tags: existing?.tags?.length ? existing.tags : tags, imageExact: existing?.imageExact ?? false });
+  }
+
+  let best: { dishId: string; score: number; reasons: string[]; dishName: string } | null = null;
+  for (const candidate of candidates.values()) {
+    const candidateName = normalizeName(candidate.name);
+    const nameScore = candidateName === inputName ? 0.5 : jaccard(inputTokens, tokenSet(candidate.name)) * 0.42;
+    const restaurantScore = input.restaurantId && candidate.restaurant_id === input.restaurantId ? 0.24 : 0;
+    const tagOverlap = candidate.tags.map(cleanTag).filter((tag) => inputTags.has(tag)).length;
+    const tagScore = Math.min(0.16, tagOverlap * 0.06);
+    const imageScore = candidate.imageExact ? 0.4 : 0;
+    const qualityFloor = (candidate.aggregate_rating ?? 0) >= 3.5 || (candidate.rating_count ?? 0) === 0 ? 0.02 : -0.08;
+    const score = Math.max(0, Math.min(1, nameScore + restaurantScore + tagScore + imageScore + qualityFloor));
+    const reasons = [candidate.imageExact ? "same image" : null, nameScore >= 0.42 ? "same dish name" : nameScore >= 0.24 ? "similar dish name" : null, restaurantScore ? "same restaurant" : null, tagOverlap ? "matching tags" : null].filter(Boolean) as string[];
+    if (score >= 0.72 && (!best || score > best.score)) best = { dishId: candidate.id, score, reasons, dishName: candidate.name };
+  }
+  return best;
 }
 
 serve(async (req) => {
