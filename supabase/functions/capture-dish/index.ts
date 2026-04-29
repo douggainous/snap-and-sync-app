@@ -193,7 +193,7 @@ serve(async (req) => {
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo, rating, review, url: signed.data?.signedUrl ?? null, aiSuggestion: { dishName: ai.dishName, tags: ai.tags, confidence: ai.confidence, status: ai.status, error: ai.error } });
+    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, aiSuggestion: { dishName: ai.dishName, tags: ai.tags, confidence: ai.confidence, status: ai.status, error: ai.error } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);
