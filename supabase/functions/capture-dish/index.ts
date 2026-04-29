@@ -216,7 +216,7 @@ serve(async (req) => {
       const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
       if (upload.error) return json({ error: "Could not upload photo." }, 500);
       const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
-      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested" }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients").single();
+      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested", matched_existing_dish_id: dishMatch?.dishId ?? null, dish_match_status: dishMatch ? "matched" : "created_new", dish_match_score: dishMatch?.score ?? null, dish_match_reasons: dishMatch?.reasons ?? [] }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients,dish_match_status,dish_match_score,dish_match_reasons,matched_existing_dish_id").single();
       if (photoError) {
         await supabase.storage.from("dish-photos").remove([path]);
         return json({ error: "Could not save photo record." }, 500);
@@ -224,7 +224,7 @@ serve(async (req) => {
       photos.push(photo);
     }
 
-    await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
+    if (!dishMatch) await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
 
     let cachedAi: { status: string; dish_name?: string | null; cuisine?: string | null; tags?: string[] | null; ingredients?: string[] | null; confidence?: number | null; confidence_level?: string | null; error?: string | null } | null = null;
     if (firstImageHash && photos[0]) {
@@ -290,7 +290,7 @@ serve(async (req) => {
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
+    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, dishMatch: dishMatch ? { status: "matched", dishId: dishMatch.dishId, dishName: dishMatch.dishName, score: dishMatch.score, reasons: dishMatch.reasons } : { status: "created_new", dishId: dish.id, dishName: dish.name, score: null, reasons: [] }, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);
