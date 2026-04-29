@@ -263,6 +263,18 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+const optimizeImageFile = async (file: File) => {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file); });
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(image.src);
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Image optimization failed")), "image/jpeg", 0.86));
+  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+};
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
 const AuthModal = ({ onClose }: { onClose: () => void }) => {
@@ -773,13 +785,19 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const firstFile = imageFiles[0];
-    const ext = firstFile.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const imagePath = `${sessionUser.id}/${Date.now()}-${slugify(parsed.data.dish_name)}.${ext}`;
-    const upload = await supabase.storage.from("food-post-images").upload(imagePath, firstFile, { contentType: firstFile.type || "image/jpeg", upsert: false });
-    if (upload.error) { setSaving(false); return toast({ title: "Photo upload failed", description: upload.error.message, variant: "destructive" }); }
+    const firstFile = await optimizeImageFile(imageFiles[0]);
+    const imageBase64 = await fileToBase64(firstFile);
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { error } = await supabase.from("food_posts").insert({ user_id: sessionUser.id, restaurant_name: parsed.data.restaurant_name, dish_name: parsed.data.dish_name, review: parsed.data.review || null, rating: parsed.data.rating, price: parsed.data.price_paid ?? null, currency: "USD", image_path: imagePath, image_url: photoPreviews[0] ?? null, ai_tags: cleanTags, extracted_data: { would_order_again: parsed.data.would_order_again, temperature_rating: parsed.data.temperature_rating, spiciness_rating: parsed.data.spiciness_rating, sweet_savory_rating: parsed.data.sweet_savory_rating, flavor_intensity_rating: parsed.data.flavor_intensity_rating, attached_photo_count: imageFiles.length }, visibility: "followers", is_draft: false });
+    const slug = `${slugify(parsed.data.dish_name)}-${Date.now()}`;
+    const { data: restaurant, error: restaurantError } = await supabase.from("restaurants").insert({ name: parsed.data.restaurant_name, slug: `${slugify(parsed.data.restaurant_name)}-${Date.now()}`, normalized_name: parsed.data.restaurant_name.toLowerCase(), created_by: sessionUser.id }).select("id").single();
+    if (restaurantError) { setSaving(false); return toast({ title: "Restaurant not saved", description: restaurantError.message, variant: "destructive" }); }
+    const { data: dish, error: dishError } = await supabase.from("dishes").insert({ restaurant_id: restaurant.id, created_by: sessionUser.id, name: parsed.data.dish_name, slug, normalized_name: parsed.data.dish_name.toLowerCase(), typical_price: parsed.data.price_paid ?? null, currency: "USD", is_published: true }).select("id").single();
+    if (dishError) { setSaving(false); return toast({ title: "Dish not saved", description: dishError.message, variant: "destructive" }); }
+    const upload = await supabase.functions.invoke("upload-dish-photo", { body: { dishId: dish.id, imageBase64, mimeType: firstFile.type, fileName: firstFile.name, altText: `${parsed.data.dish_name} at ${parsed.data.restaurant_name}` } });
+    if (upload.error || upload.data?.error) { setSaving(false); return toast({ title: "Photo upload failed", description: upload.data?.error ?? upload.error?.message ?? "Try again.", variant: "destructive" }); }
+    const { data: ratingRow, error: ratingError } = await supabase.from("ratings").insert({ dish_id: dish.id, user_id: sessionUser.id, rating: parsed.data.rating, would_order_again: parsed.data.would_order_again, temperature_rating: parsed.data.temperature_rating, spiciness_rating: parsed.data.spiciness_rating, sweet_savory_rating: parsed.data.sweet_savory_rating, flavor_intensity_rating: parsed.data.flavor_intensity_rating, is_public: true }).select("id").single();
+    if (ratingError) { setSaving(false); return toast({ title: "Rating not saved", description: ratingError.message, variant: "destructive" }); }
+    const { error } = await supabase.from("reviews").insert({ dish_id: dish.id, user_id: sessionUser.id, rating_id: ratingRow.id, body: parsed.data.review || null, price_paid: parsed.data.price_paid ?? null, currency: "USD", is_public: true });
     setSaving(false);
     if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
     toast({ title: "Review published", description: "Your photo review is saved to your food journal." });
