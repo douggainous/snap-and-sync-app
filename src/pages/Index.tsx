@@ -343,6 +343,7 @@ const Index = () => {
   const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
+  const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
@@ -722,7 +723,7 @@ const Index = () => {
             </>
           )}
 
-          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <><ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />{!sessionUser && !sharedDishNudgeDismissed && <GuestConversionNudge onClose={() => setSharedDishNudgeDismissed(true)} onSignIn={() => setAuthPrompt("Track your favorite meals")} />}</>}
 
           {view === "scan" && (
             <section className="-mx-3 space-y-3 overflow-hidden md:mx-0">
