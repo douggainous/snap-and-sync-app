@@ -766,10 +766,10 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const firstFile = await optimizeImageFile(imageFiles[0]);
-    const imageBase64 = await fileToBase64(firstFile);
+    const optimizedFiles = await Promise.all(imageFiles.slice(0, 6).map((file) => optimizeImageFile(file)));
+    const images = await Promise.all(optimizedFiles.map(async (file) => ({ imageBase64: await fileToBase64(file), mimeType: file.type, fileName: file.name })));
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, imageBase64, mimeType: firstFile.type, fileName: firstFile.name, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
+    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
     setSaving(false);
     if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const aiSuggestion = data?.aiSuggestion;
