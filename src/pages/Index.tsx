@@ -677,7 +677,7 @@ const Index = () => {
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
-      {authPrompt && <Suspense fallback={null}><AuthModal onClose={() => setAuthPrompt(null)} /></Suspense>}
+      {authPrompt && <Suspense fallback={null}><AuthModal prompt={authPrompt} onClose={() => setAuthPrompt(null)} /></Suspense>}
       {favoriteTarget && <SaveToCollectionModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 w-full max-w-full border-b border-border/50 bg-background/72 backdrop-blur-2xl">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
