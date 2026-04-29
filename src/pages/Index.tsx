@@ -169,6 +169,27 @@ const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha desser
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
+const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, trend?: Record<string, unknown> | null): MenuItem => {
+  const trendLabel = trend?.status === "viral" ? "Viral" : trend?.status === "trending" ? "Trending" : null;
+  return {
+    ...(row as MenuItem),
+    id: String(row.id ?? ""),
+    name: String(row.name ?? "Dish"),
+    slug: String(row.slug ?? slugify(String(row.name ?? "dish"))),
+    tags: Array.isArray(row.tags) ? row.tags as string[] : [],
+    dietary_tags: Array.isArray(row.dietary_tags) ? row.dietary_tags as string[] : [],
+    currency: typeof row.currency === "string" ? row.currency : "USD",
+    aggregate_rating: Number(row.aggregate_rating ?? 0),
+    rating_count: Number(row.rating_count ?? 0),
+    review_count: Number(row.review_count ?? 0),
+    photo_count: Number(row.photo_count ?? 0),
+    want_to_try_count: Number(row.want_to_try_count ?? 0),
+    favorite_count: Number(row.favorite_count ?? 0),
+    trend_status: trend?.status === "viral" || trend?.status === "trending" ? trend.status : "normal",
+    trend_labels: [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
+    trend_metrics: trend ?? null,
+  };
+};
 const sanitizePostgrestSearch = (value: string) => value
   .trim()
   .toLowerCase()
