@@ -272,22 +272,37 @@ serve(async (req) => {
     const actionsByDishId = new Map<string, Set<string>>();
     const recentByDishId = new Map<string, RecentEngagement>();
     const trendByDishId = new Map<string, TrendMetric>();
-    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map() };
+    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set() };
     if (userId && dishIds.length) {
-      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
+      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(120);
       if (error) console.error("saved action lookup failed", error);
-      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string; dishes?: { cuisine?: string | null } | null }[]) {
+        if (dishIds.includes(action.dish_id)) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+        userSignals.savedDishIds.add(action.dish_id);
+        const cuisine = action.dishes?.cuisine?.toLowerCase().trim();
+        if (cuisine) userSignals.savedCuisines.set(cuisine, (userSignals.savedCuisines.get(cuisine) ?? 0) + (action.action_type === "favorite" ? 2 : 1));
+      }
 
       const { data: profile } = await supabase.from("profiles").select("favorite_cuisines").eq("user_id", userId).maybeSingle();
       for (const cuisine of ((profile?.favorite_cuisines ?? []) as string[])) userSignals.preferredCuisines.add(cuisine.toLowerCase().trim());
 
-      const { data: pastRatings, error: pastError } = await supabase.from("ratings").select("rating,dishes(cuisine)").eq("user_id", userId).order("updated_at", { ascending: false }).limit(80);
+      const { data: pastRatings, error: pastError } = await supabase.from("ratings").select("dish_id,rating,dishes(cuisine)").eq("user_id", userId).gte("rating", 4).order("updated_at", { ascending: false }).limit(80);
       if (pastError) console.error("user preference lookup failed", pastError);
-      for (const row of (pastRatings ?? []) as { rating: number; dishes?: { cuisine?: string | null } | null }[]) {
+      const highlyRatedDishIds: string[] = [];
+      for (const row of (pastRatings ?? []) as { dish_id: string; rating: number; dishes?: { cuisine?: string | null } | null }[]) {
+        highlyRatedDishIds.push(row.dish_id);
         const cuisine = row.dishes?.cuisine?.toLowerCase().trim();
         if (!cuisine) continue;
         const current = userSignals.cuisineRatings.get(cuisine) ?? { total: 0, count: 0 };
         userSignals.cuisineRatings.set(cuisine, { total: current.total + Number(row.rating || 0), count: current.count + 1 });
+      }
+      if (highlyRatedDishIds.length) {
+        const { data: likedTags, error: likedTagsError } = await supabase.from("dish_tags").select("tag_id,tags(name)").in("dish_id", highlyRatedDishIds);
+        if (likedTagsError) console.error("liked tag lookup failed", likedTagsError);
+        for (const row of (likedTags ?? []) as { tags?: { name?: string | null } | null }[]) {
+          const tag = row.tags?.name?.toLowerCase().trim();
+          if (tag) userSignals.affinityTags.set(tag, (userSignals.affinityTags.get(tag) ?? 0) + 1);
+        }
       }
     }
 
@@ -322,7 +337,8 @@ serve(async (req) => {
     let ranked = dishes.map((dish) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
       const distance = origin ? distanceMiles(origin, restaurant) : null;
-      const scoreParts = scoreDish(dish, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights);
+      const itemTags = tagsByDishId.get(dish.id) ?? [];
+      const scoreParts = scoreDish(dish, itemTags, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights);
       const score = input.mode === "nearby" && distance != null
         ? scoreParts.score - distance * 2
         : input.mode === "recent"
@@ -334,7 +350,7 @@ serve(async (req) => {
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && input.mode === "nearby" ? "Hot near you" : null].filter(Boolean);
       return {
         ...dish,
-        tags: tagsByDishId.get(dish.id) ?? [],
+        tags: itemTags,
         dietary_tags: [],
         cover_image_url: photo?.image_url ?? null,
         restaurants: restaurant,
