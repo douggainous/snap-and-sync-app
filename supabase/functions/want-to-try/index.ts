@@ -50,7 +50,6 @@ type SavedRow = {
   dish_id: string;
   updated_at?: string | null;
   created_at?: string | null;
-  dishes?: Dish | null;
 };
 
 type PlannedDish = Dish & {
@@ -105,7 +104,7 @@ serve(async (req) => {
 
     const { data: savedRows, error: savedError } = await supabase
       .from("saved_items")
-      .select("dish_id,updated_at,created_at,dishes(id,name,slug,cuisine,section,aggregate_rating,review_count,want_to_try_count,favorite_count,typical_price,price_min,price_max,currency,restaurant_id,restaurants(id,name,address,city,cuisine,latitude,longitude,phone,website_url,maps_url))")
+      .select("dish_id,updated_at,created_at")
       .eq("user_id", user.id)
       .eq("action_type", "want_to_try")
       .order("updated_at", { ascending: false })
@@ -119,6 +118,33 @@ serve(async (req) => {
     const rows = (savedRows ?? []) as SavedRow[];
     const dishIds = rows.map((row) => row.dish_id).filter(Boolean);
     const photosByDishId = new Map<string, string>();
+    const dishesById = new Map<string, Dish>();
+
+    if (dishIds.length) {
+      const { data: dishRows, error: dishError } = await supabase
+        .from("dishes")
+        .select("id,name,slug,cuisine,section,aggregate_rating,review_count,want_to_try_count,favorite_count,typical_price,price_min,price_max,currency,restaurant_id")
+        .in("id", dishIds)
+        .eq("is_published", true);
+      if (dishError) {
+        console.error("want-to-try dish lookup failed", dishError);
+        return json({ error: "Could not load want-to-try dishes." }, 500);
+      }
+
+      const dishes = (dishRows ?? []) as Dish[];
+      const restaurantIds = [...new Set(dishes.map((dish) => dish.restaurant_id).filter(Boolean))] as string[];
+      const restaurantsById = new Map<string, Restaurant>();
+      if (restaurantIds.length) {
+        const { data: restaurants, error: restaurantError } = await supabase
+          .from("restaurants")
+          .select("id,name,address,city,cuisine,latitude,longitude,phone,website_url,maps_url")
+          .in("id", restaurantIds);
+        if (restaurantError) console.error("want-to-try restaurant lookup failed", restaurantError);
+        for (const restaurant of (restaurants ?? []) as Restaurant[]) if (restaurant.id) restaurantsById.set(restaurant.id, restaurant);
+      }
+
+      for (const dish of dishes) dishesById.set(dish.id, { ...dish, restaurants: dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null });
+    }
 
     if (dishIds.length) {
       const { data: photos, error: photoError } = await supabase
@@ -146,14 +172,15 @@ serve(async (req) => {
 
     const dishes = rows
       .map((row) => {
-        if (!row.dishes) return null;
-        const distance = distanceMiles(origin, row.dishes.restaurants);
-        const restaurant = row.dishes.restaurants;
+        const dish = dishesById.get(row.dish_id);
+        if (!dish) return null;
+        const distance = distanceMiles(origin, dish.restaurants);
+        const restaurant = dish.restaurants;
         const city = restaurant?.city?.trim();
         const locationGroup = city || restaurant?.name?.trim() || "Location pending";
         const planGroup = distance == null ? "Saved for later" : distance <= 5 ? "Plan to visit" : "Nearby";
         return {
-          ...row.dishes,
+          ...dish,
           saved_at: row.updated_at ?? row.created_at ?? null,
           cover_image_url: photosByDishId.get(row.dish_id) ?? null,
           distance_miles: distance,
