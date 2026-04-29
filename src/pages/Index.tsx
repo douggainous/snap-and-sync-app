@@ -265,11 +265,11 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
   return (
     <article className="overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-editorial)]">
       <a href={`/items/${item.slug}`} className="group relative block overflow-hidden bg-secondary">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name}`} className="h-[420px] w-full object-cover transition duration-500 group-hover:scale-105 sm:h-[520px]" loading="lazy" width={960} height={720} /> : <div className="flex h-[420px] w-full items-center justify-center bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 text-secondary-foreground sm:h-[520px]"><ChefHat className="size-24 opacity-50" /></div>}
+          {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-[420px] w-full object-cover transition duration-500 group-hover:scale-105 sm:h-[520px]" loading="lazy" width={960} height={720} /> : <div className="flex h-[420px] w-full items-center justify-center bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 text-secondary-foreground sm:h-[520px]"><ChefHat className="size-24 opacity-50" /></div>}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
         <div className="absolute left-4 top-4 rounded-full bg-accent px-4 py-2 text-xl font-black text-accent-foreground shadow-[var(--shadow-soft)]"><Star className="mr-1 inline size-6 fill-current" />{item.aggregate_rating}</div>
         <div className="absolute bottom-0 left-0 right-0 p-4 text-foreground sm:p-6">
-          <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-black text-accent"><MapPin className="size-3" />{item.restaurants?.name} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</p>
+          <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-black text-accent"><MapPin className="size-3" />{item.restaurants?.name ?? "Standalone dish"} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "No restaurant linked"}</p>
           <h2 className="font-display text-4xl font-black leading-none sm:text-6xl">{item.name}</h2>
           <p className="mt-3 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/85 sm:text-base">{item.description}</p>
         </div>
