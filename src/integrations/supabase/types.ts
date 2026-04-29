@@ -75,7 +75,7 @@ export type Database = {
           price_max: number | null
           price_min: number | null
           rating_count: number
-          restaurant_id: string
+          restaurant_id: string | null
           review_count: number
           save_count: number
           search_vector: unknown
@@ -103,7 +103,7 @@ export type Database = {
           price_max?: number | null
           price_min?: number | null
           rating_count?: number
-          restaurant_id: string
+          restaurant_id?: string | null
           review_count?: number
           save_count?: number
           search_vector?: unknown
@@ -131,7 +131,7 @@ export type Database = {
           price_max?: number | null
           price_min?: number | null
           rating_count?: number
-          restaurant_id?: string
+          restaurant_id?: string | null
           review_count?: number
           save_count?: number
           search_vector?: unknown
