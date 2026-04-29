@@ -38,37 +38,40 @@ function json(data: unknown, status = 200) {
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "dish";
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
+const sha256Hex = async (bytes: Uint8Array) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 
 async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!lovableApiKey) return { status: "failed", dishName: null, tags: [], confidence: null, error: "Lovable AI is not configured." };
+  if (!lovableApiKey) return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "Lovable AI is not configured." };
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+        model: "google/gemini-3-flash-preview",
       messages: [
-        { role: "system", content: "Recognize the primary prepared food dish in the image. Return only tool output. Be conservative: if uncertain, use the user's typed dish as a hint and lower confidence. Tags should describe cuisine, ingredients, dietary style, preparation, flavor, and course." },
+          { role: "system", content: "Recognize the primary prepared food dish in the image. Return only tool output. Be conservative: if uncertain, lower confidence. Include cuisine and ingredients only when visually supported. Tags should be short and useful for discovery." },
         { role: "user", content: [{ type: "text", text: `Identify this dish. User context: ${JSON.stringify(context)}` }, { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] },
       ],
-      tools: [{ type: "function", function: { name: "recognize_dish", description: "Return dish recognition suggestions for a food photo.", parameters: { type: "object", properties: { dishName: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 8 }, confidence: { type: "number", minimum: 0, maximum: 1 } }, required: ["dishName", "tags", "confidence"], additionalProperties: false } } }],
+        tools: [{ type: "function", function: { name: "recognize_dish", description: "Return dish recognition suggestions for a food photo.", parameters: { type: "object", properties: { dishName: { type: "string" }, cuisine: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 8 }, ingredients: { type: "array", items: { type: "string" }, maxItems: 8 }, confidence: { type: "number", minimum: 0, maximum: 1 } }, required: ["dishName", "cuisine", "tags", "ingredients", "confidence"], additionalProperties: false } } }],
       tool_choice: { type: "function", function: { name: "recognize_dish" } },
     }),
   });
 
   if (!response.ok) {
-    if (response.status === 429) return { status: "rate_limited", dishName: null, tags: [], confidence: null, error: "AI rate limit reached. Dish was saved without AI suggestions." };
-    if (response.status === 402) return { status: "payment_required", dishName: null, tags: [], confidence: null, error: "AI credits are exhausted. Dish was saved without AI suggestions." };
+    if (response.status === 429) return { status: "rate_limited", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI rate limit reached. Dish was saved without AI suggestions." };
+    if (response.status === 402) return { status: "payment_required", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI credits are exhausted. Dish was saved without AI suggestions." };
     console.error("Lovable AI dish recognition failed", response.status, await response.text());
-    return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI recognition failed. Dish was saved without AI suggestions." };
+    return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI recognition failed. Dish was saved without AI suggestions." };
   }
 
   const data = await response.json();
   const toolArgs = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (!toolArgs) return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI returned no dish suggestion." };
-  const parsed = JSON.parse(toolArgs) as { dishName?: string; tags?: string[]; confidence?: number };
-  return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence: typeof parsed.confidence === "number" ? parsed.confidence : null, error: null };
+  if (!toolArgs) return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI returned no dish suggestion." };
+  const parsed = JSON.parse(toolArgs) as { dishName?: string; cuisine?: string; tags?: string[]; ingredients?: string[]; confidence?: number };
+  const confidence = typeof parsed.confidence === "number" ? parsed.confidence : null;
+  return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, cuisine: parsed.cuisine?.trim().slice(0, 80) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), ingredients: [...new Set((parsed.ingredients ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence, confidenceLevel: confidenceLevel(confidence), rawResult: parsed, error: null };
 }
 
 serve(async (req) => {
