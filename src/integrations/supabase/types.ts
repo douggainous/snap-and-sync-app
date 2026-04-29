@@ -1750,6 +1750,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_taste_profiles: {
+        Row: {
+          created_at: string
+          cuisine_affinity: Json
+          engagement_counts: Json
+          last_interaction_at: string | null
+          refreshed_at: string
+          tag_affinity: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cuisine_affinity?: Json
+          engagement_counts?: Json
+          last_interaction_at?: string | null
+          refreshed_at?: string
+          tag_affinity?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cuisine_affinity?: Json
+          engagement_counts?: Json
+          last_interaction_at?: string | null
+          refreshed_at?: string
+          tag_affinity?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       users: {
         Row: {
           avatar_url: string | null

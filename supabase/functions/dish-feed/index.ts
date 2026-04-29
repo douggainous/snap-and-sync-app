@@ -99,6 +99,8 @@ type UserSignals = {
   savedCuisines: Map<string, number>;
   affinityTags: Map<string, number>;
   savedDishIds: Set<string>;
+  profileCuisines: Map<string, number>;
+  profileTags: Map<string, number>;
 };
 
 type TrendMetric = {
@@ -221,8 +223,10 @@ function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, 
   const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 36 : 0;
   const savedCuisineAffinity = cuisine ? Math.min(32, (userSignals.savedCuisines.get(cuisine) ?? 0) * 8) : 0;
   const tagAffinity = Math.min(34, dishTags.reduce((sum, tag) => sum + (userSignals.affinityTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 5);
+  const profileCuisineAffinity = cuisine ? Math.min(28, (userSignals.profileCuisines.get(cuisine) ?? 0) * 3.5) : 0;
+  const profileTagAffinity = Math.min(30, dishTags.reduce((sum, tag) => sum + (userSignals.profileTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 2.8);
   const alreadySavedPenalty = userSignals.savedDishIds.has(dish.id) ? -10 : 0;
-  const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + alreadySavedPenalty);
+  const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + profileCuisineAffinity + profileTagAffinity + alreadySavedPenalty);
   const score = qualityScore * weights.quality + popularityScore * weights.popularity + trendingScore * weights.trending + personalizationScore * weights.personalization;
   return { score, qualityScore, popularityScore, trendingScore, personalizationScore };
 }
@@ -336,8 +340,13 @@ serve(async (req) => {
     const actionsByDishId = new Map<string, Set<string>>();
     const trendByDishId = new Map<string, TrendMetric>();
     const sponsorshipByDishId = new Map<string, Sponsorship>();
-    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set() };
+    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set(), profileCuisines: new Map(), profileTags: new Map() };
     if (userId && dishIds.length) {
+      const { data: tasteProfile, error: tasteError } = await supabase.from("user_taste_profiles").select("cuisine_affinity,tag_affinity").eq("user_id", userId).maybeSingle();
+      if (tasteError) console.error("taste profile lookup failed", tasteError);
+      for (const [cuisine, value] of Object.entries((tasteProfile?.cuisine_affinity ?? {}) as Record<string, number>)) userSignals.profileCuisines.set(cuisine.toLowerCase().trim(), Number(value || 0));
+      for (const [tag, value] of Object.entries((tasteProfile?.tag_affinity ?? {}) as Record<string, number>)) userSignals.profileTags.set(tag.toLowerCase().trim(), Number(value || 0));
+
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(120);
       if (error) console.error("saved action lookup failed", error);
       for (const action of (savedActions ?? []) as { dish_id: string; action_type: string; dishes?: { cuisine?: string | null } | null }[]) {
