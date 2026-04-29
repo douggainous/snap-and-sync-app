@@ -396,7 +396,7 @@ const Index = () => {
   const [scanRestaurant, setScanRestaurant] = useState("");
   const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
-  const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
+  const [listTarget, setListTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
@@ -662,18 +662,17 @@ const Index = () => {
   };
 
   const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => {
-    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
+    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save dishes you want to try"}.`);
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
     const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
-    if (enabled) {
-      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "Saved", slug: "saved", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
+    if (enabled && action === "want_to_try") {
+      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "I want to try", slug: "i-want-to-try", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
       if (collection?.id) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     }
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
-    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Saved to want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? "Your dish interaction is stored." : "Your dish interaction was removed." });
-    if (enabled) setFavoriteTarget(item);
+    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Added to I want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? (action === "want_to_try" ? "Hold Want to try next time to choose a list." : "Your dish interaction is stored.") : "Your dish interaction was removed." });
   };
 
   const startFirstReview = (item: MenuItem) => {
