@@ -583,26 +583,26 @@ const Index = () => {
   const displayedItems = items;
 
   return (
-    <main className="min-h-screen bg-background pb-24 text-foreground md:pb-0">
+    <main className="min-h-screen bg-background pb-28 text-foreground md:pb-8">
       {authPrompt && <AuthModal onClose={() => setAuthPrompt(null)} />}
       {favoriteTarget && <SaveToListModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
-      <header className="sticky top-0 z-30 border-b bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
-          <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
-          <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-4" /></button></form>
-          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSignOut={signOut} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
+      <header className="sticky top-0 z-30 border-b border-border/50 bg-background/72 backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 md:px-6">
+          <a href="/" className="flex items-center gap-2 font-display text-xl font-black"><span className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground"><ChefHat className="size-5" /></span>PlateLoop</a>
+          <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-xl"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-11 rounded-full border-border/70 bg-secondary/70 pl-10 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-4" /></button></form>
+          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSignOut={signOut} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button className="rounded-full" onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-7xl gap-5 px-3 py-5 md:grid-cols-[240px_1fr] md:px-6">
+      <section className="mx-auto grid max-w-5xl gap-5 px-0 py-3 md:grid-cols-[180px_1fr] md:px-6 md:py-6">
         <aside className="hidden md:block">
-          <nav className="sticky top-24 space-y-2 rounded-lg border bg-card p-3 shadow-[var(--shadow-soft)]">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
+          <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
-        <div className="min-w-0 space-y-5">
+        <div className="min-w-0 space-y-4 px-3 md:px-0">
           {searchPanelOpen && (
-            <div className="fixed inset-x-0 bottom-[76px] z-40 border-t bg-card p-3 shadow-[var(--shadow-editorial)] md:hidden">
-              <form onSubmit={submitSearch} className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus className="h-12 pl-9 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes, cravings, restaurants" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2" aria-label="Search"><Search className="size-4" /></Button></form>
+            <div className="fixed inset-x-3 bottom-[88px] z-40 rounded-3xl glass-surface p-3 md:hidden">
+              <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus className="h-13 rounded-full bg-secondary/80 pl-10 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2 rounded-full" aria-label="Search"><Search className="size-4" /></Button></form>
             </div>
           )}
 
