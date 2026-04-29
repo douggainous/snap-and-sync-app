@@ -115,6 +115,15 @@ type TrendMetric = {
   is_hot_nearby: boolean;
 };
 
+type Sponsorship = {
+  dish_id: string;
+  label: string;
+  sponsor_name?: string | null;
+  boost_score: number;
+  target_cuisine?: string | null;
+  target_city?: string | null;
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -146,6 +155,14 @@ function normalizeWeights(input: Partial<typeof DEFAULT_WEIGHTS>) {
 function ageDays(date?: string | null) {
   if (!date) return Number.POSITIVE_INFINITY;
   return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
+}
+
+function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null) {
+  if (!sponsor) return false;
+  const cuisine = (dish.cuisine ?? restaurant?.cuisine ?? "").toLowerCase();
+  const city = (restaurant?.city ?? "").toLowerCase();
+  return (!sponsor.target_cuisine || cuisine.includes(sponsor.target_cuisine.toLowerCase()))
+    && (!sponsor.target_city || city.includes(sponsor.target_city.toLowerCase()));
 }
 
 function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS, trend?: TrendMetric) {
