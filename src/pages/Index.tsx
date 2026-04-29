@@ -225,6 +225,12 @@ const optimizeImageFile = async (file: File) => {
   return new File([blob], `${slugify(sourceFile.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
 };
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
+const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms); });
+  try { return await Promise.race([promise, timeout]); }
+  finally { if (timeoutId) clearTimeout(timeoutId); }
+};
 
 const AuthModal = ({ onClose }: { onClose: () => void }) => {
   const { toast } = useToast();
@@ -282,7 +288,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
 
   return (
     <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:min-h-[760px] md:rounded-[32px]">
-        {item.cover_image_url ? <div className="image-skeleton absolute inset-0"><img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" width={960} height={1280} /></div> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
+        {item.cover_image_url ? <div className="image-skeleton absolute inset-0"><img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 760px, 100vw" width={720} height={960} /></div> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background/55 to-transparent" />
       <a href={`/items/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
@@ -305,7 +311,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
 const SearchDishCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const trendLabel = item.trend_labels?.[0];
-  return <article className="group overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/items/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-3 top-3 soft-chip text-accent"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabel && <span className="absolute left-3 top-14 soft-chip text-accent"><Sparkles className="size-3" />{trendLabel}</span>}<button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><div className="absolute inset-x-0 bottom-0 p-3"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/72">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
+  return <article className="group overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/items/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-3 top-3 soft-chip text-accent"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabel && <span className="absolute left-3 top-14 soft-chip text-accent"><Sparkles className="size-3" />{trendLabel}</span>}<button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><div className="absolute inset-x-0 bottom-0 p-3"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/72">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
 };
 
 const ItemCard = FeedItemCard;
@@ -326,6 +332,7 @@ const Index = () => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const [feedMode, setFeedMode] = useState<FeedMode>("trending");
   const [searchSort, setSearchSort] = useState<SearchSort>(parseSearchSort(searchParams.get("sort")));
   const [cuisineFilter, setCuisineFilter] = useState(searchParams.get("cuisine") ?? "all");
@@ -402,8 +409,11 @@ const Index = () => {
     const useSearchEndpoint = Boolean(cleanTerm || filters.cuisine !== "all" || filters.rating !== "0" || filters.sort !== "relevance");
     const sort = filters.sort === "relevance" ? (mode === "nearby" ? "nearby" : mode === "recent" ? "recent" : "trending") : filters.sort;
 
-    const { data, error } = await supabase.functions.invoke(useSearchEndpoint ? "dish-search" : "dish-feed", {
-      body: {
+    setFeedError(null);
+    let result;
+    try {
+      result = await withTimeout(supabase.functions.invoke(useSearchEndpoint ? "dish-search" : "dish-feed", {
+        body: {
         mode,
         query: cleanTerm,
         sort,
@@ -414,10 +424,22 @@ const Index = () => {
         latitude: locationPoint?.latitude ?? null,
         longitude: locationPoint?.longitude ?? null,
         radiusMiles: 50,
-      },
-    });
+        },
+      }), 12000, "Feed request");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "The feed took too long to respond.";
+      setFeedError(message);
+      toast({ title: "Feed unavailable", description: message, variant: "destructive" });
+      if (!append) setItems([]);
+      setHasMoreItems(false);
+      setLoading(false);
+      setLoadingMore(false);
+      return;
+    }
 
+    const { data, error } = result;
     if (error || data?.error) {
+      setFeedError(data?.error ?? error?.message ?? "Try again.");
       toast({ title: "Feed unavailable", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
       if (!append) setItems([]);
       setHasMoreItems(false);
@@ -500,7 +522,16 @@ const Index = () => {
 
   const loadNearbyRestaurants = async (locationPoint: { latitude: number; longitude: number }) => {
     setLoadingNearby(true);
-    const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
+    let result;
+    try {
+      result = await withTimeout(supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } }), 9000, "Nearby restaurants");
+    } catch (error) {
+      setLoadingNearby(false);
+      setNearbyRestaurants([]);
+      toast({ title: "Nearby restaurants unavailable", description: error instanceof Error ? error.message : "Try again later.", variant: "destructive" });
+      return;
+    }
+    const { data, error } = result;
     setLoadingNearby(false);
     if (error || data?.error) {
       setNearbyRestaurants([]);
@@ -532,7 +563,7 @@ const Index = () => {
   const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => {
     if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } });
+    const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
@@ -650,7 +681,7 @@ const Index = () => {
               </div>}
               {feedMode === "nearby" && <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />}
               <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Trending"}</h1>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : query ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div> : <div className="feed-scroll space-y-4">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : query ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div> : <div className="feed-scroll space-y-4">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
             </>
           )}
 
@@ -659,7 +690,7 @@ const Index = () => {
           {view === "scan" && (
             <section className="-mx-3 space-y-3 md:mx-0">
               <div className="relative min-h-[calc(100svh-164px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:rounded-[32px]">
-                {photoPreviews.length ? <img src={photoPreviews[0]} alt="Captured dish" className="absolute inset-0 h-full w-full object-cover animate-scale-in" /> : <button onClick={captureReviewPhoto} className="absolute inset-0 flex w-full flex-col items-center justify-center gap-6 bg-secondary text-foreground"><span className="flex size-32 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-editorial)] transition active:scale-95"><CameraIcon className="size-14" /></span><span className="soft-chip text-accent"><Sparkles className="size-4" />Point. Snap. Rate.</span></button>}
+                {photoPreviews.length ? <img src={photoPreviews[0]} alt="Captured dish" className="absolute inset-0 h-full w-full object-cover animate-scale-in" decoding="async" /> : <button onClick={captureReviewPhoto} className="absolute inset-0 flex w-full flex-col items-center justify-center gap-6 bg-secondary text-foreground"><span className="flex size-32 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-editorial)] transition active:scale-95"><CameraIcon className="size-14" /></span><span className="soft-chip text-accent"><Sparkles className="size-4" />Point. Snap. Rate.</span></button>}
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-background via-background/14 to-background/35" />
                 <div className="absolute left-4 top-4 soft-chip text-accent"><CameraIcon className="size-4" />Capture</div>
                 {photoPreviews.length > 0 && <div className="absolute right-4 top-4 flex gap-2"><span className="soft-chip text-accent"><Sparkles className="size-4" />AI ready</span><Button type="button" size="icon" variant="secondary" className="size-10 rounded-full bg-background/70 backdrop-blur-xl" onClick={() => removeReviewPhoto(0)} aria-label="Remove photo"><X className="size-4" /></Button></div>}
@@ -737,7 +768,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
     <section className="-mx-3 space-y-4 md:mx-0">
       <div className="relative min-h-[calc(100svh-108px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/60 md:min-h-[760px] md:rounded-[32px]">
         <div className="flex h-full snap-x snap-mandatory overflow-x-auto">
-          {[item.cover_image_url].filter(Boolean).map((photo) => <div key={photo} className="image-skeleton h-[calc(100svh-108px)] min-h-[620px] w-full shrink-0 snap-center md:h-[760px]"><img src={photo!} alt={`${item.name} menu item`} className="h-full w-full object-cover" width={1024} height={1280} /></div>)}
+          {[item.cover_image_url].filter(Boolean).map((photo) => <div key={photo} className="image-skeleton h-[calc(100svh-108px)] min-h-[620px] w-full shrink-0 snap-center md:h-[760px]"><img src={photo!} alt={`${item.name} menu item`} className="h-full w-full object-cover" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 760px, 100vw" width={900} height={1200} /></div>)}
           {!item.cover_image_url && <div className="flex h-[calc(100svh-108px)] min-h-[620px] w-full shrink-0 snap-center items-center justify-center bg-secondary md:h-[760px]"><ChefHat className="size-20 opacity-40" /></div>}
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/24 to-background/20" />
@@ -759,6 +790,8 @@ const RelatedDishes = ({ tags, currentName }: { tags: string[]; currentName: str
   const suggestions = tags.length ? tags : [currentName];
   return <section className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">You might also like</h2><div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-1">{suggestions.map((tag) => <a key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="min-w-36 rounded-2xl bg-secondary/70 p-3 transition active:scale-95"><p className="text-sm font-black line-clamp-1">{tag}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Explore dishes</p></a>)}</div></section>;
 };
+
+const FeedErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => <section className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">Could not load dishes</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">{message}</p><Button className="mt-4 rounded-full" onClick={onRetry}>Retry</Button></section>;
 
 const SearchResultsLoader = () => <div className="space-y-5" aria-label="Loading search results" aria-live="polite">{[0, 1].map((item) => <div key={item} className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/60"><div className="h-[74vh] min-h-96 animate-pulse bg-secondary" /><div className="flex gap-2 p-3"><span className="h-10 w-24 animate-pulse rounded-full bg-primary/30" /><span className="h-10 w-28 animate-pulse rounded-full bg-muted" /></div></div>)}</div>;
 
@@ -843,7 +876,7 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     const optimizedFiles = await Promise.all(imageFiles.slice(0, 6).map((file) => optimizeImageFile(file)));
     const images = await Promise.all(optimizedFiles.map(async (file) => ({ imageBase64: await fileToBase64(file), mimeType: file.type, fileName: file.name })));
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
+    const { data, error } = await withTimeout(supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } }), 18000, "Dish capture").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Dish capture timed out." }, error: null }));
     setSaving(false);
     if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const aiSuggestion = data?.aiSuggestion;
@@ -878,7 +911,7 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
 
     setSaving(true);
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
+    const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } }), 10000, "Review submit").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Review submit timed out." }, error: null }));
     setSaving(false);
     if (error || data?.error) return toast({ title: "Review not published", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
@@ -976,11 +1009,11 @@ type WantToTryDish = MenuItem & { saved_at?: string | null; distance_miles?: num
 type SavedActionRow = { dish_id: string; action_type: string; updated_at?: string | null; created_at?: string | null };
 type RatingActionRow = { dish_id: string; rating: number; updated_at?: string | null; created_at?: string | null };
 
-const DashboardDishGrid = ({ title, dishes, empty }: { title: string; dishes: DashboardDish[]; empty: string }) => <section className="rounded-[28px] glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">{title}</h2><span className="soft-chip">{dishes.length}</span></div>{dishes.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{dishes.slice(0, 6).map((dish) => <a key={`${title}-${dish.id}`} href={`/items/${dish.slug}`} className="group overflow-hidden rounded-3xl bg-secondary/70 shadow-[var(--shadow-soft)] ring-1 ring-border/50 transition active:scale-[0.98]"><div className="relative aspect-[4/5] overflow-hidden bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-10 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-2 top-2 soft-chip text-accent"><Star className="size-3 fill-current" />{(dish.user_rating ?? dish.aggregate_rating ?? 0).toFixed(1)}</span><div className="absolute inset-x-0 bottom-0 p-3"><p className="line-clamp-2 font-display text-xl font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/70">{dish.restaurant_name || dish.cuisine || dish.section || "Dish"}</p></div></div></a>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">{empty}</p>}</section>;
+const DashboardDishGrid = ({ title, dishes, empty }: { title: string; dishes: DashboardDish[]; empty: string }) => <section className="rounded-[28px] glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">{title}</h2><span className="soft-chip">{dishes.length}</span></div>{dishes.length ? <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{dishes.slice(0, 6).map((dish) => <a key={`${title}-${dish.id}`} href={`/items/${dish.slug}`} className="group overflow-hidden rounded-3xl bg-secondary/70 shadow-[var(--shadow-soft)] ring-1 ring-border/50 transition active:scale-[0.98]"><div className="relative aspect-[4/5] overflow-hidden bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-10 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-2 top-2 soft-chip text-accent"><Star className="size-3 fill-current" />{(dish.user_rating ?? dish.aggregate_rating ?? 0).toFixed(1)}</span><div className="absolute inset-x-0 bottom-0 p-3"><p className="line-clamp-2 font-display text-xl font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/70">{dish.restaurant_name || dish.cuisine || dish.section || "Dish"}</p></div></div></a>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">{empty}</p>}</section>;
 
 const WantToTryPlanner = ({ dishes, hasLocation, onUseLocation }: { dishes: WantToTryDish[]; hasLocation: boolean; onUseLocation: () => void }) => {
   const groups = useMemo(() => Array.from(dishes.reduce<Map<string, WantToTryDish[]>>((map, dish) => map.set(dish.location_group, [...(map.get(dish.location_group) ?? []), dish]), new Map()).entries()), [dishes]);
-  return <section className="rounded-[28px] glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">Want to try</h2><div className="flex items-center gap-2"><span className="soft-chip">{dishes.length}</span>{!hasLocation && <Button size="sm" variant="outline" className="rounded-full" onClick={onUseLocation}><LocateFixed className="size-4" />Sort nearby</Button>}</div></div>{dishes.length ? <div className="space-y-4">{groups.map(([location, items]) => <div key={location} className="rounded-3xl bg-secondary/55 p-3"><div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-display text-xl font-black"><MapPin className="mr-1 inline size-4 text-accent" />{location}</h3><span className="soft-chip text-accent">{items.length}</span></div><div className="grid gap-3 md:grid-cols-2">{items.map((dish) => <a key={dish.id} href={`/items/${dish.slug}`} className="group grid grid-cols-[84px_1fr] gap-3 rounded-2xl bg-background/75 p-2 ring-1 ring-border/45 transition active:scale-[0.98]"><div className="aspect-square overflow-hidden rounded-2xl bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-8 opacity-40" /></div>}</div><div className="min-w-0 py-1"><div className="mb-1 flex gap-1"><span className="soft-chip text-accent"><Star className="size-3 fill-current" />{Number(dish.aggregate_rating ?? 0).toFixed(1)}</span>{dish.distance_miles != null && <span className="soft-chip">{dish.distance_miles.toFixed(1)} mi</span>}</div><p className="line-clamp-2 font-display text-lg font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-muted-foreground">{dish.restaurants?.name || dish.cuisine || "Dish"}</p><p className="mt-2 text-xs font-black text-accent">{dish.plan_group}</p></div></a>)}</div></div>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">Save dishes you are craving next.</p>}</section>;
+  return <section className="rounded-[28px] glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">Want to try</h2><div className="flex items-center gap-2"><span className="soft-chip">{dishes.length}</span>{!hasLocation && <Button size="sm" variant="outline" className="rounded-full" onClick={onUseLocation}><LocateFixed className="size-4" />Sort nearby</Button>}</div></div>{dishes.length ? <div className="space-y-4">{groups.map(([location, items]) => <div key={location} className="rounded-3xl bg-secondary/55 p-3"><div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-display text-xl font-black"><MapPin className="mr-1 inline size-4 text-accent" />{location}</h3><span className="soft-chip text-accent">{items.length}</span></div><div className="grid gap-3 md:grid-cols-2">{items.map((dish) => <a key={dish.id} href={`/items/${dish.slug}`} className="group grid grid-cols-[84px_1fr] gap-3 rounded-2xl bg-background/75 p-2 ring-1 ring-border/45 transition active:scale-[0.98]"><div className="aspect-square overflow-hidden rounded-2xl bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-8 opacity-40" /></div>}</div><div className="min-w-0 py-1"><div className="mb-1 flex gap-1"><span className="soft-chip text-accent"><Star className="size-3 fill-current" />{Number(dish.aggregate_rating ?? 0).toFixed(1)}</span>{dish.distance_miles != null && <span className="soft-chip">{dish.distance_miles.toFixed(1)} mi</span>}</div><p className="line-clamp-2 font-display text-lg font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-muted-foreground">{dish.restaurants?.name || dish.cuisine || "Dish"}</p><p className="mt-2 text-xs font-black text-accent">{dish.plan_group}</p></div></a>)}</div></div>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">Save dishes you are craving next.</p>}</section>;
 };
 
 const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }: { sessionUser: UserSession; userLocation: { latitude: number; longitude: number } | null; onUseLocation: () => void; onProtected: (message: string) => void }) => {
@@ -996,7 +1029,7 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
     Promise.all([
       supabase.from("saved_items").select("dish_id,action_type,updated_at,created_at").eq("user_id", sessionUser.id).in("action_type", ["favorite", "want_to_try"]).order("updated_at", { ascending: false }).limit(30),
       supabase.from("ratings").select("dish_id,rating,updated_at,created_at").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(18),
-      supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }),
+      withTimeout(supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }), 8000, "Want-to-try").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Want-to-try timed out." }, error: null })),
     ]).then(async ([savedResult, ratingsResult, wantToTryResult]) => {
       if (!wantToTryResult.error && !wantToTryResult.data?.error) setWantToTryPlan((wantToTryResult.data?.dishes ?? []) as WantToTryDish[]);
       else setWantToTryPlan([]);
