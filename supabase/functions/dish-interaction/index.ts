@@ -8,13 +8,30 @@ const corsHeaders = {
 };
 
 const BodySchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("rate"), dishId: z.string().uuid(), rating: z.number().min(1).max(5), review: z.string().trim().max(1200).optional().nullable() }),
+  z.object({
+    type: z.literal("rate"),
+    dishId: z.string().uuid(),
+    rating: z.number().min(1).max(5),
+    review: z.string().trim().max(1200).optional().nullable(),
+    pricePaid: z.number().min(0).max(10000).optional().nullable(),
+    tags: z.array(z.string().trim().min(1).max(60)).max(8).optional().default([]),
+    metrics: z.object({
+      wouldOrderAgain: z.boolean().optional(),
+      temperature: z.number().int().min(1).max(5).optional(),
+      spiciness: z.number().int().min(0).max(5).optional(),
+      sweetSavory: z.number().int().min(1).max(5).optional(),
+      flavorIntensity: z.number().int().min(1).max(5).optional(),
+    }).optional(),
+  }),
   z.object({ type: z.literal("toggle_action"), dishId: z.string().uuid(), action: z.enum(["want_to_try", "favorite"]), enabled: z.boolean() }),
 ]);
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
+
+const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "tag";
+const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -52,7 +69,17 @@ serve(async (req) => {
     if (input.type === "rate") {
       const { data: rating, error: ratingError } = await supabase
         .from("ratings")
-        .upsert({ dish_id: input.dishId, user_id: user.id, rating: input.rating, is_public: true }, { onConflict: "user_id,dish_id" })
+        .upsert({
+          dish_id: input.dishId,
+          user_id: user.id,
+          rating: input.rating,
+          would_order_again: input.metrics?.wouldOrderAgain ?? null,
+          temperature_rating: input.metrics?.temperature ?? null,
+          spiciness_rating: input.metrics?.spiciness ?? null,
+          sweet_savory_rating: input.metrics?.sweetSavory ?? null,
+          flavor_intensity_rating: input.metrics?.flavorIntensity ?? null,
+          is_public: true,
+        }, { onConflict: "user_id,dish_id" })
         .select("id,rating")
         .single();
       if (ratingError) {
@@ -61,17 +88,24 @@ serve(async (req) => {
       }
 
       let review = null;
-      if (input.review?.trim()) {
+      if (input.review?.trim() || input.pricePaid != null) {
         const { data: reviewRow, error: reviewError } = await supabase
           .from("reviews")
-          .upsert({ dish_id: input.dishId, user_id: user.id, rating_id: rating.id, body: input.review.trim(), is_public: true }, { onConflict: "rating_id" })
-          .select("id,body")
+          .upsert({ dish_id: input.dishId, user_id: user.id, rating_id: rating.id, body: input.review?.trim() || null, price_paid: input.pricePaid ?? null, currency: "USD", is_public: true }, { onConflict: "rating_id" })
+          .select("id,body,price_paid")
           .single();
         if (reviewError) {
           console.error("Review upsert failed", reviewError);
           return json({ error: "Could not save review." }, 500);
         }
         review = reviewRow;
+      }
+
+      const tags = [...new Set((input.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8);
+      for (const tagName of tags) {
+        const tagSlug = slugify(tagName);
+        const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
+        if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user.id });
       }
 
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();

@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+
 const BodySchema = z.object({
   mode: z.enum(["trending", "nearby", "recent"]).default("trending"),
   query: z.string().trim().max(100).optional().default(""),
@@ -103,9 +105,17 @@ serve(async (req) => {
     const input = parsed.data;
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     if (!supabaseUrl || !serviceRoleKey) return json({ error: "Backend is not configured." }, 500);
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+    let userId: string | null = null;
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader && supabaseAnonKey) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: { user } } = await authClient.auth.getUser();
+      userId = user?.id ?? null;
+    }
     const fetchCount = input.mode === "nearby" ? Math.min(250, input.offset + input.limit * 8) : input.limit;
     const fetchOffset = input.mode === "nearby" ? 0 : input.offset;
 
@@ -154,7 +164,7 @@ serve(async (req) => {
       const signedPaths = photoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!)
       const signedUrlByPath = new Map<string, string>();
       if (signedPaths.length) {
-        const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, 60 * 60 * 24 * 7);
+        const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, IMAGE_SIGNED_URL_TTL_SECONDS);
         for (const item of signed.data ?? []) if (item.path && item.signedUrl) signedUrlByPath.set(item.path, item.signedUrl);
       }
 
@@ -186,6 +196,13 @@ serve(async (req) => {
       }
     }
 
+    const actionsByDishId = new Map<string, Set<string>>();
+    if (userId && dishIds.length) {
+      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
+      if (error) console.error("saved action lookup failed", error);
+      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+    }
+
     const origin = input.latitude != null && input.longitude != null ? { latitude: input.latitude, longitude: input.longitude } : null;
     let ranked = dishes.map((dish) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
@@ -202,6 +219,8 @@ serve(async (req) => {
         dietary_tags: [],
         cover_image_url: photo?.image_url ?? null,
         restaurants: restaurant,
+        user_want_to_try: actionsByDishId.get(dish.id)?.has("want_to_try") ?? false,
+        user_favorite: actionsByDishId.get(dish.id)?.has("favorite") ?? false,
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
       };

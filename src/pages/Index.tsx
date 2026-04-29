@@ -2,6 +2,7 @@ import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useEffect, useMemo, 
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Capacitor } from "@capacitor/core";
+import heic2any from "heic2any";
 import { z } from "zod";
 import {
   Bookmark,
@@ -93,6 +94,8 @@ type MenuItem = {
   photo_count: number;
   want_to_try_count?: number;
   favorite_count?: number;
+  user_want_to_try?: boolean;
+  user_favorite?: boolean;
   cover_image_url?: string | null;
   restaurants?: Restaurant | null;
 };
@@ -110,6 +113,7 @@ type MenuItemReview = {
   flavor_intensity_rating?: number | null;
   created_at?: string;
 };
+type ReviewFeedRow = { id: string; body?: string | null; price_paid?: number | null; currency: string; created_at?: string; ratings?: Pick<MenuItemReview, "rating" | "would_order_again" | "temperature_rating" | "spiciness_rating" | "sweet_savory_rating" | "flavor_intensity_rating"> | null };
 type FavoriteList = {
   id: string;
   title: string;
@@ -191,8 +195,16 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+const convertHeicFile = async (file: File) => {
+  if (!isHeicFile(file)) return file;
+  const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.86 });
+  const blob = Array.isArray(converted) ? converted[0] : converted;
+  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+};
 const optimizeImageFile = async (file: File) => {
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(file); });
+  const sourceFile = await convertHeicFile(file);
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = reject; img.src = URL.createObjectURL(sourceFile); });
   const maxSide = 1600;
   const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
@@ -201,7 +213,7 @@ const optimizeImageFile = async (file: File) => {
   canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(image.src);
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error("Image optimization failed")), "image/jpeg", 0.86));
-  return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
+  return new File([blob], `${slugify(sourceFile.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
 };
 const blobUrlToFile = async (url: string, name: string) => { const response = await fetch(url); const blob = await response.blob(); return new File([blob], name, { type: blob.type || "image/jpeg" }); };
 
@@ -255,7 +267,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite") => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -284,8 +296,8 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {item.review_count > 0 ? <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" onClick={() => onFirstReview?.(item)}><Star />Be first to review this!</Button>}
-          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "want_to_try")}><Bookmark />Want to try {item.want_to_try_count ? `· ${item.want_to_try_count}` : ""}</Button>
-          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "favorite")}><Heart />Favorite {item.favorite_count ? `· ${item.favorite_count}` : ""}</Button>
+          <Button variant={item.user_want_to_try ? "default" : "outline"} size="sm" onClick={() => onDishAction?.(item, "want_to_try", !item.user_want_to_try)}><Bookmark />Want to try {item.want_to_try_count ? `· ${item.want_to_try_count}` : ""}</Button>
+          <Button variant={item.user_favorite ? "default" : "outline"} size="sm" onClick={() => onDishAction?.(item, "favorite", !item.user_favorite)}><Heart />Favorite {item.favorite_count ? `· ${item.favorite_count}` : ""}</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
         </div>
@@ -496,13 +508,14 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
-  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite") => {
+  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => {
     if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled: true } });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } });
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
-    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish } : row));
-    toast({ title: action === "favorite" ? "Favorited" : "Saved to want to try", description: "Your dish interaction is stored." });
+    const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
+    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
+    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Saved to want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? "Your dish interaction is stored." : "Your dish interaction was removed." });
   };
 
   const startFirstReview = (item: MenuItem) => {
@@ -518,10 +531,15 @@ const Index = () => {
     setPhotoPreviews((current) => [...current, ...previews].slice(0, 6));
   };
 
-  const chooseReviewPhotos = (event: ChangeEvent<HTMLInputElement>) => {
+  const chooseReviewPhotos = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
-    if (!files.length) return;
-    addReviewPhotos(files, files.map((file) => URL.createObjectURL(file)));
+    if (!files.length) { event.target.value = ""; return; }
+    try {
+      const compatibleFiles = await Promise.all(files.map(convertHeicFile));
+      addReviewPhotos(compatibleFiles, compatibleFiles.map((file) => URL.createObjectURL(file)));
+    } catch {
+      toast({ title: "Photo format not supported", description: "Convert HEIC/HEIF photos to JPEG or choose another image.", variant: "destructive" });
+    }
     event.target.value = "";
   };
 
@@ -802,7 +820,8 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null } });
+    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
     setSaving(false);
     if (error || data?.error) return toast({ title: "Review not published", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
@@ -819,7 +838,7 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   const [reviews, setReviews] = useState<MenuItemReview[]>([]);
   useEffect(() => {
     if (!isUuid(item.id)) { setReviews([]); return; }
-    supabase.from("reviews").select("id,body,price_paid,currency,created_at,ratings(rating,would_order_again,temperature_rating,spiciness_rating,sweet_savory_rating,flavor_intensity_rating)").eq("dish_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []).map((row: any) => ({ id: row.id, rating: row.ratings?.rating ?? 0, review: row.body, price_paid: row.price_paid, currency: row.currency, tags: [], would_order_again: row.ratings?.would_order_again, temperature_rating: row.ratings?.temperature_rating, spiciness_rating: row.ratings?.spiciness_rating, sweet_savory_rating: row.ratings?.sweet_savory_rating, flavor_intensity_rating: row.ratings?.flavor_intensity_rating, created_at: row.created_at })) as MenuItemReview[]));
+    supabase.from("reviews").select("id,body,price_paid,currency,created_at,ratings(rating,would_order_again,temperature_rating,spiciness_rating,sweet_savory_rating,flavor_intensity_rating)").eq("dish_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews(((data ?? []) as ReviewFeedRow[]).map((row) => ({ id: row.id, rating: row.ratings?.rating ?? 0, review: row.body, price_paid: row.price_paid, currency: row.currency, tags: [], would_order_again: row.ratings?.would_order_again, temperature_rating: row.ratings?.temperature_rating, spiciness_rating: row.ratings?.spiciness_rating, sweet_savory_rating: row.ratings?.sweet_savory_rating, flavor_intensity_rating: row.ratings?.flavor_intensity_rating, created_at: row.created_at }))));
   }, [item.id, refreshKey]);
   const rows = reviews;
   return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid grid-cols-2 gap-2 text-xs font-bold text-muted-foreground md:grid-cols-4"><span>Temp {review.temperature_rating ?? "—"}/5</span><span>Spice {review.spiciness_rating ?? "—"}/5</span><span>Sweet↔Savory {review.sweet_savory_rating ?? "—"}/5</span><span>Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div><p className="mt-2 text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;

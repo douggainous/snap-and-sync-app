@@ -7,13 +7,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+
 const BodySchema = z.object({
   dishName: z.string().trim().min(2).max(120),
   restaurantName: z.string().trim().max(120).optional().nullable(),
   imageBase64: z.string().min(100).max(12_000_000).optional(),
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]).optional(),
   fileName: z.string().trim().max(160).optional(),
-  images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
+  images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
   rating: z.number().min(1).max(5).optional(),
   review: z.string().trim().max(1200).optional().nullable(),
   pricePaid: z.number().min(0).max(10000).optional().nullable(),
@@ -34,7 +36,7 @@ function json(data: unknown, status = 200) {
 }
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "dish";
-const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 
 async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
@@ -143,7 +145,7 @@ serve(async (req) => {
       const path = `${user.id}/dishes/${dish.id}/${Date.now()}-${index}-${slugify(image.fileName ?? input.dishName)}.${extFor(image.mimeType)}`;
       const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
       if (upload.error) return json({ error: "Could not upload photo." }, 500);
-      const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
+      const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
       const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, ai_dish_name: index === 0 ? ai.dishName : null, ai_tags: index === 0 ? ai.tags : [], ai_confidence: index === 0 ? ai.confidence : null, ai_status: index === 0 ? ai.status : "not_requested", ai_error: index === 0 ? ai.error : null }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error").single();
       if (photoError) {
         await supabase.storage.from("dish-photos").remove([path]);
