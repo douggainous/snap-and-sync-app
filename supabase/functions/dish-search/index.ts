@@ -239,15 +239,21 @@ serve(async (req) => {
       if (error) console.error("photo lookup failed", error);
 
       const photoRows = (photos ?? []) as { dish_id: string; image_url?: string | null; storage_path?: string | null; storage_bucket?: string | null }[];
-      const signedPaths = photoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!);
+      const firstPhotoRows: typeof photoRows = [];
+      const seenPhotoDishIds = new Set<string>();
+      for (const photo of photoRows) {
+        if (seenPhotoDishIds.has(photo.dish_id)) continue;
+        seenPhotoDishIds.add(photo.dish_id);
+        firstPhotoRows.push(photo);
+      }
+      const signedPaths = firstPhotoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!);
       const signedUrlByPath = new Map<string, string>();
       if (signedPaths.length) {
         const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, IMAGE_SIGNED_URL_TTL_SECONDS);
         for (const item of signed.data ?? []) if (item.path && item.signedUrl) signedUrlByPath.set(item.path, item.signedUrl);
       }
 
-      for (const photo of photoRows) {
-        if (photosByDishId.has(photo.dish_id)) continue;
+      for (const photo of firstPhotoRows) {
         photosByDishId.set(photo.dish_id, { ...photo, image_url: photo.storage_path ? signedUrlByPath.get(photo.storage_path) ?? photo.image_url : photo.image_url });
       }
     }
@@ -309,7 +315,10 @@ serve(async (req) => {
       const restaurantHit = terms && restaurant?.name.toLowerCase().includes(terms) ? 12 : 0;
       const distancePenalty = distance == null ? 0 : Math.min(distance * 2, 80);
       const trend = trendByDishId.get(dish.id);
-      const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) + trendBoost(trend) + preferenceBoost(dish, userSignals) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const engagement = engagementScore(dish);
+      const velocity = trendBoost(trend);
+      const personalization = preferenceBoost(dish, userSignals);
+      const score = nameHit + cuisineHit + restaurantHit + engagement + velocity + personalization - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
@@ -324,9 +333,9 @@ serve(async (req) => {
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
         ranking_signals: {
-          engagement: Number(engagementScore(dish).toFixed(2)),
-          velocity: Number(trendBoost(trend).toFixed(2)),
-          personalization: Number(preferenceBoost(dish, userSignals).toFixed(2)),
+          engagement: Number(engagement.toFixed(2)),
+          velocity: Number(velocity.toFixed(2)),
+          personalization: Number(personalization.toFixed(2)),
         },
         trend_status: trendStatus,
         trend_labels: trendLabels,
