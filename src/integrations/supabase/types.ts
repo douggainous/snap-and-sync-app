@@ -84,14 +84,21 @@ export type Database = {
       dish_trend_metrics: {
         Row: {
           dish_id: string
+          favorite_velocity: number
           is_hot_nearby: boolean
+          location_spike_score: number
+          previous_favorite_count: number
           previous_rating_count: number
+          previous_review_count: number
           previous_save_count: number
           previous_share_count: number
           rating_velocity: number
+          recent_favorite_count: number
           recent_rating_count: number
+          recent_review_count: number
           recent_save_count: number
           recent_share_count: number
+          review_velocity: number
           save_velocity: number
           share_velocity: number
           spike_score: number
@@ -103,14 +110,21 @@ export type Database = {
         }
         Insert: {
           dish_id: string
+          favorite_velocity?: number
           is_hot_nearby?: boolean
+          location_spike_score?: number
+          previous_favorite_count?: number
           previous_rating_count?: number
+          previous_review_count?: number
           previous_save_count?: number
           previous_share_count?: number
           rating_velocity?: number
+          recent_favorite_count?: number
           recent_rating_count?: number
+          recent_review_count?: number
           recent_save_count?: number
           recent_share_count?: number
+          review_velocity?: number
           save_velocity?: number
           share_velocity?: number
           spike_score?: number
@@ -122,20 +136,96 @@ export type Database = {
         }
         Update: {
           dish_id?: string
+          favorite_velocity?: number
           is_hot_nearby?: boolean
+          location_spike_score?: number
+          previous_favorite_count?: number
           previous_rating_count?: number
+          previous_review_count?: number
           previous_save_count?: number
           previous_share_count?: number
           rating_velocity?: number
+          recent_favorite_count?: number
           recent_rating_count?: number
+          recent_review_count?: number
           recent_save_count?: number
           recent_share_count?: number
+          review_velocity?: number
           save_velocity?: number
           share_velocity?: number
           spike_score?: number
           status?: string
           trend_score?: number
           updated_at?: string
+          window_ended_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
+      }
+      dish_trend_snapshots: {
+        Row: {
+          created_at: string
+          dish_id: string
+          favorite_velocity: number
+          id: string
+          is_hot_nearby: boolean
+          location_spike_score: number
+          rating_velocity: number
+          recent_favorite_count: number
+          recent_rating_count: number
+          recent_review_count: number
+          recent_save_count: number
+          recent_share_count: number
+          review_velocity: number
+          save_velocity: number
+          share_velocity: number
+          spike_score: number
+          status: string
+          trend_score: number
+          window_ended_at: string
+          window_started_at: string
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          favorite_velocity?: number
+          id?: string
+          is_hot_nearby?: boolean
+          location_spike_score?: number
+          rating_velocity?: number
+          recent_favorite_count?: number
+          recent_rating_count?: number
+          recent_review_count?: number
+          recent_save_count?: number
+          recent_share_count?: number
+          review_velocity?: number
+          save_velocity?: number
+          share_velocity?: number
+          spike_score?: number
+          status?: string
+          trend_score?: number
+          window_ended_at?: string
+          window_started_at: string
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          favorite_velocity?: number
+          id?: string
+          is_hot_nearby?: boolean
+          location_spike_score?: number
+          rating_velocity?: number
+          recent_favorite_count?: number
+          recent_rating_count?: number
+          recent_review_count?: number
+          recent_save_count?: number
+          recent_share_count?: number
+          review_velocity?: number
+          save_velocity?: number
+          share_velocity?: number
+          spike_score?: number
+          status?: string
+          trend_score?: number
           window_ended_at?: string
           window_started_at?: string
         }
@@ -1289,14 +1379,21 @@ export type Database = {
         Args: { _dish_id: string }
         Returns: {
           dish_id: string
+          favorite_velocity: number
           is_hot_nearby: boolean
+          location_spike_score: number
+          previous_favorite_count: number
           previous_rating_count: number
+          previous_review_count: number
           previous_save_count: number
           previous_share_count: number
           rating_velocity: number
+          recent_favorite_count: number
           recent_rating_count: number
+          recent_review_count: number
           recent_save_count: number
           recent_share_count: number
+          review_velocity: number
           save_velocity: number
           share_velocity: number
           spike_score: number
