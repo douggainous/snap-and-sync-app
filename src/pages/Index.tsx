@@ -488,8 +488,15 @@ const Index = () => {
     setSearchSort(nextSort);
     setCuisineFilter(nextCuisine);
     setMinRating(nextRating);
-    void loadItems(nextQuery, false, feedMode, userLocation, { cuisine: nextCuisine, rating: nextRating, sort: nextSort });
-  }, [searchParams, feedMode]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (view !== "discover" || selectedSlug || listSlug) return;
+    const handle = window.setTimeout(() => {
+      void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [view, selectedSlug, listSlug, query, feedMode, userLocation, cuisineFilter, minRating, searchSort, loadItems]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -543,14 +550,6 @@ const Index = () => {
     navigate(`/search?${params.toString()}`);
     void loadItems(query, false, feedMode, userLocation);
   };
-
-  useEffect(() => {
-    if (view !== "discover" || selectedItem || listSlug) return;
-    const handle = window.setTimeout(() => {
-      void loadItems(query, false, feedMode, userLocation);
-    }, 220);
-    return () => window.clearTimeout(handle);
-  }, [query, searchSort, cuisineFilter, minRating]);
 
   const applySearchSuggestion = (value: string) => {
     setQuery(value);
