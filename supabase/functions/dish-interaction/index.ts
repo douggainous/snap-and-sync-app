@@ -40,16 +40,10 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Authentication required." }, 401);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) return json({ error: "Backend is not configured." }, 500);
-
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: userError } = await authClient.auth.getUser();
-    if (userError || !user) return json({ error: "Authentication required." }, 401);
 
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) return json({ error: "Invalid interaction payload.", details: parsed.error.flatten().fieldErrors }, 400);
@@ -57,7 +51,16 @@ serve(async (req) => {
     const input = parsed.data;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    await supabase.from("users").upsert({
+    let user: { id: string; email?: string; user_metadata?: Record<string, string> } | null = null;
+    if (authHeader) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data, error: userError } = await authClient.auth.getUser();
+      if (!userError && data.user) user = data.user;
+    }
+
+    if (input.type !== "share" && !user) return json({ error: "Authentication required." }, 401);
+
+    if (user) await supabase.from("users").upsert({
       id: user.id,
       email: user.email ?? null,
       display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
