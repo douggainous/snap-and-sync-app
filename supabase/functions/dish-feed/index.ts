@@ -153,6 +153,7 @@ serve(async (req) => {
     if (!parsed.success) return json({ error: "Invalid feed request.", details: parsed.error.flatten().fieldErrors }, 400);
 
     const input = parsed.data;
+    const rankingWeights = normalizeWeights(input.rankingWeights);
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
@@ -166,7 +167,7 @@ serve(async (req) => {
       const { data: { user } } = await authClient.auth.getUser();
       userId = user?.id ?? null;
     }
-    const fetchCount = input.mode === "nearby" ? Math.min(250, input.offset + input.limit * 8) : input.limit;
+    const fetchCount = input.mode === "nearby" ? Math.min(250, input.offset + input.limit * 8) : Math.min(120, input.offset + input.limit * 6);
     const fetchOffset = input.mode === "nearby" ? 0 : input.offset;
 
     let query = supabase
@@ -176,6 +177,8 @@ serve(async (req) => {
 
     const search = input.query.toLowerCase().replace(/[^a-z0-9\s'&/-]/g, " ").replace(/\s+/g, " ").trim();
     if (search) query = query.or(`normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%`);
+
+    query = query.or(`rating_count.lt.3,aggregate_rating.gte.${LOW_QUALITY_RATING_FLOOR},created_at.gte.${new Date(Date.now() - STALE_DAYS * 86_400_000).toISOString()}`);
 
     if (input.mode === "recent") query = query.order("created_at", { ascending: false });
     else query = query.order("trending_score", { ascending: false }).order("created_at", { ascending: false });
@@ -247,21 +250,60 @@ serve(async (req) => {
     }
 
     const actionsByDishId = new Map<string, Set<string>>();
+    const recentByDishId = new Map<string, RecentEngagement>();
+    const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map() };
     if (userId && dishIds.length) {
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
       if (error) console.error("saved action lookup failed", error);
       for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+
+      const { data: profile } = await supabase.from("profiles").select("favorite_cuisines").eq("user_id", userId).maybeSingle();
+      for (const cuisine of ((profile?.favorite_cuisines ?? []) as string[])) userSignals.preferredCuisines.add(cuisine.toLowerCase().trim());
+
+      const { data: pastRatings, error: pastError } = await supabase.from("ratings").select("rating,dishes(cuisine)").eq("user_id", userId).order("updated_at", { ascending: false }).limit(80);
+      if (pastError) console.error("user preference lookup failed", pastError);
+      for (const row of (pastRatings ?? []) as { rating: number; dishes?: { cuisine?: string | null } | null }[]) {
+        const cuisine = row.dishes?.cuisine?.toLowerCase().trim();
+        if (!cuisine) continue;
+        const current = userSignals.cuisineRatings.get(cuisine) ?? { total: 0, count: 0 };
+        userSignals.cuisineRatings.set(cuisine, { total: current.total + Number(row.rating || 0), count: current.count + 1 });
+      }
+    }
+
+    if (dishIds.length) {
+      const since = new Date(Date.now() - VELOCITY_WINDOW_DAYS * 86_400_000).toISOString();
+      const [recentRatingsResult, recentSavesResult] = await Promise.all([
+        supabase.from("ratings").select("dish_id,created_at").in("dish_id", dishIds).gte("created_at", since),
+        supabase.from("saved_items").select("dish_id,action_type,created_at").in("dish_id", dishIds).gte("created_at", since),
+      ]);
+      if (recentRatingsResult.error) console.error("recent rating velocity lookup failed", recentRatingsResult.error);
+      if (recentSavesResult.error) console.error("recent save velocity lookup failed", recentSavesResult.error);
+      for (const row of (recentRatingsResult.data ?? []) as { dish_id: string; created_at: string }[]) {
+        const current = recentByDishId.get(row.dish_id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 };
+        current.ratings += 1;
+        if (!current.lastEventAt || row.created_at > current.lastEventAt) current.lastEventAt = row.created_at;
+        recentByDishId.set(row.dish_id, current);
+      }
+      for (const row of (recentSavesResult.data ?? []) as { dish_id: string; action_type: string; created_at: string }[]) {
+        const current = recentByDishId.get(row.dish_id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 };
+        if (row.action_type === "want_to_try") current.wantToTry += 1;
+        else if (row.action_type === "favorite") current.favorites += 1;
+        else current.saves += 1;
+        if (!current.lastEventAt || row.created_at > current.lastEventAt) current.lastEventAt = row.created_at;
+        recentByDishId.set(row.dish_id, current);
+      }
     }
 
     const origin = input.latitude != null && input.longitude != null ? { latitude: input.latitude, longitude: input.longitude } : null;
     let ranked = dishes.map((dish) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
       const distance = origin ? distanceMiles(origin, restaurant) : null;
+      const scoreParts = scoreDish(dish, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights);
       const score = input.mode === "nearby" && distance != null
-        ? engagementScore(dish) - distance * 2
+        ? scoreParts.score - distance * 2
         : input.mode === "recent"
-          ? recencyBoost(dish.created_at) + engagementScore(dish) * 0.2
-          : engagementScore(dish);
+          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
+          : scoreParts.score;
       const photo = photosByDishId.get(dish.id);
       return {
         ...dish,
@@ -273,17 +315,21 @@ serve(async (req) => {
         user_favorite: actionsByDishId.get(dish.id)?.has("favorite") ?? false,
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
+        ranking_signals: {
+          quality: Number(scoreParts.qualityScore.toFixed(2)),
+          popularity: Number(scoreParts.popularityScore.toFixed(2)),
+          trending: Number(scoreParts.trendingScore.toFixed(2)),
+          personalization: Number(scoreParts.personalizationScore.toFixed(2)),
+        },
       };
     });
 
-    if (input.mode === "nearby") {
-      ranked = ranked
-        .filter((dish) => dish.distance_miles != null && dish.distance_miles <= input.radiusMiles)
-        .sort((a, b) => b.feed_score - a.feed_score)
-        .slice(input.offset, input.offset + input.limit);
-    }
+    ranked = ranked
+      .filter((dish) => input.mode !== "nearby" || (dish.distance_miles != null && dish.distance_miles <= input.radiusMiles))
+      .sort((a, b) => b.feed_score - a.feed_score)
+      .slice(input.mode === "nearby" ? input.offset : 0, (input.mode === "nearby" ? input.offset : 0) + input.limit);
 
-    return json({ items: ranked, nextOffset: input.offset + ranked.length, hasMore: ranked.length === input.limit, mode: input.mode });
+    return json({ items: ranked, nextOffset: input.offset + ranked.length, hasMore: ranked.length === input.limit, mode: input.mode, rankingWeights });
   } catch (error) {
     console.error("dish-feed error", error);
     return json({ error: "Unexpected error." }, 500);
