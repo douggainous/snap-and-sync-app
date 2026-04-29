@@ -644,7 +644,7 @@ const Index = () => {
         </div>
       </header>
 
-      <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 py-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
+      <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 pb-3 pt-0 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
         <aside className="hidden lg:block">
           <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
@@ -660,7 +660,7 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              <section className="relative z-10 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-y border-border/40 bg-background px-3 py-3 backdrop-blur-2xl lg:sticky lg:top-20 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border lg:bg-background/72">
+              <section className="relative z-10 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-b border-border/40 bg-background px-3 pb-3 pt-2 backdrop-blur-2xl lg:sticky lg:top-20 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border lg:bg-background/72 lg:py-3">
                 <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input className="h-14 rounded-full border-foreground/10 bg-secondary/70 pl-12 pr-12 text-lg font-black" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-2 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-background/70 text-muted-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button></form>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">{suggestedSearches.map((suggestion) => <button key={suggestion} type="button" onClick={() => applySearchSuggestion(suggestion)} className="soft-chip shrink-0 transition active:scale-95">{suggestion}</button>)}</div>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">
