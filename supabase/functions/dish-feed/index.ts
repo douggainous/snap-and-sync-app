@@ -320,21 +320,16 @@ serve(async (req) => {
     }
 
     const tagsByDishId = new Map<string, string[]>();
+    const tagRowsByDishId = new Map<string, DishTagRow[]>();
     if (dishIds.length) {
-      const { data: dishTags, error } = await supabase.from("dish_tags").select("dish_id,tag_id").in("dish_id", dishIds);
+      const { data: dishTags, error } = await supabase.from("dish_tags").select("dish_id,category,confidence,tags(name)").in("dish_id", dishIds).gte("confidence", 0.55).order("confidence", { ascending: false });
       if (error) console.error("dish tag lookup failed", error);
-      const tagRows = (dishTags ?? []) as { dish_id: string; tag_id: string }[];
-      const tagIds = [...new Set(tagRows.map((row) => row.tag_id))];
-      const tagNamesById = new Map<string, string>();
-      if (tagIds.length) {
-        const { data: tags, error: tagError } = await supabase.from("tags").select("id,name").in("id", tagIds);
-        if (tagError) console.error("tag lookup failed", tagError);
-        for (const tag of (tags ?? []) as { id: string; name: string }[]) tagNamesById.set(tag.id, tag.name);
-      }
+      const tagRows = (dishTags ?? []) as DishTagRow[];
       for (const row of tagRows) {
-        const tagName = tagNamesById.get(row.tag_id);
+        const tagName = row.tags?.name ?? null;
         if (!tagName) continue;
-        tagsByDishId.set(row.dish_id, [...(tagsByDishId.get(row.dish_id) ?? []), tagName]);
+        if ((tagsByDishId.get(row.dish_id) ?? []).length < 10) tagsByDishId.set(row.dish_id, [...(tagsByDishId.get(row.dish_id) ?? []), tagName]);
+        tagRowsByDishId.set(row.dish_id, [...(tagRowsByDishId.get(row.dish_id) ?? []), row]);
       }
     }
 
@@ -396,11 +391,12 @@ serve(async (req) => {
       const recentFromTrend = { ratings: Number(trend?.recent_rating_count ?? 0), wantToTry: Number(trend?.recent_save_count ?? 0), favorites: Number(trend?.recent_favorite_count ?? 0), saves: Number(trend?.recent_save_count ?? 0) };
       const scoreParts = scoreDish(dish, itemTags, recentFromTrend, userSignals, rankingWeights, trend);
       const nativeBoost = dishBoostModifier(dish, scoreParts.qualityScore);
+      const tagBoost = tagRankingBoost(tagRowsByDishId.get(dish.id) ?? [], trend);
       const score = input.mode === "nearby" && distance != null
-        ? scoreParts.score - distance * 2 + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0)
+        ? scoreParts.score - distance * 2 + tagBoost + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0)
         : input.mode === "recent"
-          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35 + nativeBoost * 0.5 + (isRelevantSponsor ? Math.min(6, Number(sponsor?.boost_score ?? 0)) : 0)
-          : scoreParts.score + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0);
+          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35 + tagBoost * 0.5 + nativeBoost * 0.5 + (isRelevantSponsor ? Math.min(6, Number(sponsor?.boost_score ?? 0)) : 0)
+          : scoreParts.score + tagBoost + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0);
       const photo = photosByDishId.get(dish.id);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
@@ -419,6 +415,7 @@ serve(async (req) => {
           popularity: Number(scoreParts.popularityScore.toFixed(2)),
           trending: Number(scoreParts.trendingScore.toFixed(2)),
           personalization: Number(scoreParts.personalizationScore.toFixed(2)),
+          tags: Number(tagBoost.toFixed(2)),
           boost: Number(nativeBoost.toFixed(2)),
         },
         trend_status: trendStatus,
