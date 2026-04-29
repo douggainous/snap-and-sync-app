@@ -14,6 +14,158 @@ export type Database = {
   }
   public: {
     Tables: {
+      dish_tags: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          dish_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          dish_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          dish_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dish_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dish_tags_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dish_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dishes: {
+        Row: {
+          aggregate_rating: number
+          cover_photo_id: string | null
+          created_at: string
+          created_by: string | null
+          cuisine: string | null
+          currency: string
+          description: string | null
+          id: string
+          is_published: boolean
+          like_count: number
+          name: string
+          normalized_name: string
+          photo_count: number
+          price_max: number | null
+          price_min: number | null
+          rating_count: number
+          restaurant_id: string
+          review_count: number
+          save_count: number
+          search_vector: unknown
+          section: string | null
+          slug: string
+          trending_score: number
+          typical_price: number | null
+          updated_at: string
+          want_to_try_count: number
+        }
+        Insert: {
+          aggregate_rating?: number
+          cover_photo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          like_count?: number
+          name: string
+          normalized_name: string
+          photo_count?: number
+          price_max?: number | null
+          price_min?: number | null
+          rating_count?: number
+          restaurant_id: string
+          review_count?: number
+          save_count?: number
+          search_vector?: unknown
+          section?: string | null
+          slug: string
+          trending_score?: number
+          typical_price?: number | null
+          updated_at?: string
+          want_to_try_count?: number
+        }
+        Update: {
+          aggregate_rating?: number
+          cover_photo_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          cuisine?: string | null
+          currency?: string
+          description?: string | null
+          id?: string
+          is_published?: boolean
+          like_count?: number
+          name?: string
+          normalized_name?: string
+          photo_count?: number
+          price_max?: number | null
+          price_min?: number | null
+          rating_count?: number
+          restaurant_id?: string
+          review_count?: number
+          save_count?: number
+          search_vector?: unknown
+          section?: string | null
+          slug?: string
+          trending_score?: number
+          typical_price?: number | null
+          updated_at?: string
+          want_to_try_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dishes_cover_photo_fk"
+            columns: ["cover_photo_id"]
+            isOneToOne: false
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dishes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dishes_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorite_list_items: {
         Row: {
           created_at: string
@@ -458,6 +610,76 @@ export type Database = {
           },
         ]
       }
+      photos: {
+        Row: {
+          alt_text: string | null
+          created_at: string
+          dish_id: string
+          height: number | null
+          id: string
+          image_url: string | null
+          is_public: boolean
+          review_id: string | null
+          storage_bucket: string
+          storage_path: string | null
+          updated_at: string
+          user_id: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          created_at?: string
+          dish_id: string
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean
+          review_id?: string | null
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          created_at?: string
+          dish_id?: string
+          height?: number | null
+          id?: string
+          image_url?: string | null
+          is_public?: boolean
+          review_id?: string | null
+          storage_bucket?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photos_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photos_review_fk"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_comments: {
         Row: {
           body: string
@@ -590,6 +812,66 @@ export type Database = {
         }
         Relationships: []
       }
+      ratings: {
+        Row: {
+          created_at: string
+          dish_id: string
+          flavor_intensity_rating: number | null
+          id: string
+          is_public: boolean
+          rating: number
+          spiciness_rating: number | null
+          sweet_savory_rating: number | null
+          temperature_rating: number | null
+          updated_at: string
+          user_id: string
+          would_order_again: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          flavor_intensity_rating?: number | null
+          id?: string
+          is_public?: boolean
+          rating: number
+          spiciness_rating?: number | null
+          sweet_savory_rating?: number | null
+          temperature_rating?: number | null
+          updated_at?: string
+          user_id: string
+          would_order_again?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          flavor_intensity_rating?: number | null
+          id?: string
+          is_public?: boolean
+          rating?: number
+          spiciness_rating?: number | null
+          sweet_savory_rating?: number | null
+          temperature_rating?: number | null
+          updated_at?: string
+          user_id?: string
+          would_order_again?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ratings_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurants: {
         Row: {
           address: string | null
@@ -605,11 +887,14 @@ export type Database = {
           longitude: number | null
           maps_url: string | null
           name: string
+          normalized_name: string | null
           phone: string | null
           photo_reference: string | null
           price_level: number | null
           rating: number | null
           review_count: number | null
+          search_vector: unknown
+          slug: string | null
           updated_at: string
           website_url: string | null
         }
@@ -627,11 +912,14 @@ export type Database = {
           longitude?: number | null
           maps_url?: string | null
           name: string
+          normalized_name?: string | null
           phone?: string | null
           photo_reference?: string | null
           price_level?: number | null
           rating?: number | null
           review_count?: number | null
+          search_vector?: unknown
+          slug?: string | null
           updated_at?: string
           website_url?: string | null
         }
@@ -649,13 +937,190 @@ export type Database = {
           longitude?: number | null
           maps_url?: string | null
           name?: string
+          normalized_name?: string | null
           phone?: string | null
           photo_reference?: string | null
           price_level?: number | null
           rating?: number | null
           review_count?: number | null
+          search_vector?: unknown
+          slug?: string | null
           updated_at?: string
           website_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "restaurants_created_by_users_fk"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reviews: {
+        Row: {
+          body: string | null
+          created_at: string
+          currency: string
+          dish_id: string
+          id: string
+          is_public: boolean
+          price_paid: number | null
+          rating_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          currency?: string
+          dish_id: string
+          id?: string
+          is_public?: boolean
+          price_paid?: number | null
+          rating_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          currency?: string
+          dish_id?: string
+          id?: string
+          is_public?: boolean
+          price_paid?: number | null
+          rating_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reviews_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_rating_id_fkey"
+            columns: ["rating_id"]
+            isOneToOne: false
+            referencedRelation: "ratings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reviews_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_items: {
+        Row: {
+          action_type: Database["public"]["Enums"]["saved_item_type"]
+          created_at: string
+          dish_id: string
+          id: string
+          note: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action_type?: Database["public"]["Enums"]["saved_item_type"]
+          created_at?: string
+          dish_id: string
+          id?: string
+          note?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["saved_item_type"]
+          created_at?: string
+          dish_id?: string
+          id?: string
+          note?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_items_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          slug?: string
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          dietary_preferences: string[]
+          display_name: string | null
+          email: string | null
+          favorite_cuisines: string[]
+          id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          dietary_preferences?: string[]
+          display_name?: string | null
+          email?: string | null
+          favorite_cuisines?: string[]
+          id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          dietary_preferences?: string[]
+          display_name?: string | null
+          email?: string | null
+          favorite_cuisines?: string[]
+          id?: string
+          updated_at?: string
+          username?: string | null
         }
         Relationships: []
       }
@@ -664,14 +1129,39 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ensure_current_user_profile: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          dietary_preferences: string[]
+          display_name: string | null
+          email: string | null
+          favorite_cuisines: string[]
+          id: string
+          updated_at: string
+          username: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "users"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      refresh_dish_rollups: { Args: { _dish_id: string }; Returns: undefined }
       refresh_menu_item_rating: {
         Args: { _menu_item_id: string }
         Returns: undefined
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       slugify: { Args: { value: string }; Returns: string }
     }
     Enums: {
       post_visibility: "public" | "followers" | "private"
+      saved_item_type: "saved" | "want_to_try" | "tried" | "liked"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -800,6 +1290,7 @@ export const Constants = {
   public: {
     Enums: {
       post_visibility: ["public", "followers", "private"],
+      saved_item_type: ["saved", "want_to_try", "tried", "liked"],
     },
   },
 } as const
