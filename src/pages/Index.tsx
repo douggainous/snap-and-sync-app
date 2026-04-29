@@ -169,6 +169,7 @@ const parseSearchSort = (value: string | null): SearchSort => ["relevance", "tre
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, trend?: Record<string, unknown> | null): MenuItem => {
   const trendLabel = trend?.status === "viral" ? "Viral" : trend?.status === "trending" ? "Trending" : null;
+  const incomingLabels = Array.isArray(row.trend_labels) ? row.trend_labels.filter((label): label is string => typeof label === "string") : [];
   return {
     ...(row as MenuItem),
     id: String(row.id ?? ""),
@@ -184,7 +185,7 @@ const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, tre
     want_to_try_count: Number(row.want_to_try_count ?? 0),
     favorite_count: Number(row.favorite_count ?? 0),
     trend_status: trend?.status === "viral" || trend?.status === "trending" ? trend.status : "normal",
-    trend_labels: [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
+    trend_labels: incomingLabels.length ? incomingLabels : [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
     trend_metrics: trend ?? null,
   };
 };
