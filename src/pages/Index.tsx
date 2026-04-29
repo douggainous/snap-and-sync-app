@@ -1,8 +1,5 @@
-import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, lazy, MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { Capacitor } from "@capacitor/core";
-import heic2any from "heic2any";
 import { z } from "zod";
 import {
   Bookmark,
@@ -49,9 +46,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
-import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
+const AuthModal = lazy(() => import("@/components/AuthModal"));
 
 type View = "discover" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
@@ -228,6 +226,7 @@ const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { 
 const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
 const convertHeicFile = async (file: File) => {
   if (!isHeicFile(file)) return file;
+  const { default: heic2any } = await import("heic2any");
   const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.86 });
   const blob = Array.isArray(converted) ? converted[0] : converted;
   return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
@@ -251,56 +250,6 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
   const timeout = new Promise<never>((_, reject) => { timeoutId = setTimeout(() => reject(new Error(`${label} timed out`)), ms); });
   try { return await Promise.race([promise, timeout]); }
   finally { if (timeoutId) clearTimeout(timeoutId); }
-};
-
-const AuthModal = ({ onClose }: { onClose: () => void }) => {
-  const { toast } = useToast();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setLoading(true);
-    try {
-      const result = mode === "signup"
-        ? await supabase.auth.signUp({ email, password, options: { emailRedirectTo: window.location.origin } })
-        : await supabase.auth.signInWithPassword({ email, password });
-      if (result.error) throw result.error;
-      toast({ title: mode === "signup" ? "Check your email" : "Signed in", description: mode === "signup" ? "Confirm your email before signing in." : "You can now review and save dishes." });
-      if (mode === "signin") onClose();
-    } catch (error) {
-      toast({ title: "Sign-in failed", description: error instanceof Error ? error.message : "Try again.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const googleSignIn = async () => {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: `${window.location.origin}/` });
-    if (result.redirected) return;
-    if (result.error) toast({ title: "Google sign-in failed", description: result.error.message, variant: "destructive" });
-    else onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end overflow-x-hidden bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center">
-      <div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)] md:max-w-md">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div><p className="text-sm font-bold text-accent">Account required for this action</p><h2 className="font-display text-3xl font-black">{mode === "signup" ? "Create your food passport" : "Sign in to continue"}</h2></div>
-          <Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button>
-        </div>
-        <form onSubmit={submit} className="space-y-3">
-          <Input type="email" placeholder="Email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-          <Input type="password" placeholder="Password" value={password} onChange={(event) => setPassword(event.target.value)} minLength={6} required />
-          <Button className="w-full" disabled={loading}>{loading && <Loader2 className="animate-spin" />}{mode === "signup" ? "Sign up" : "Sign in"}</Button>
-        </form>
-        <Button variant="outline" className="mt-3 w-full" onClick={googleSignIn}>Continue with Google</Button>
-        <button className="mt-4 text-sm font-bold text-primary" onClick={() => setMode(mode === "signup" ? "signin" : "signup")}>{mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}</button>
-      </div>
-    </div>
-  );
 };
 
 const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
@@ -345,6 +294,8 @@ const Index = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const feedRequestRef = useRef(0);
+  const itemsLengthRef = useRef(0);
   const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -372,6 +323,12 @@ const Index = () => {
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
+
+  useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
+
+  useEffect(() => {
+    if (selectedSlug || listSlug) feedRequestRef.current += 1;
+  }, [selectedSlug, listSlug]);
 
   useEffect(() => {
     const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
@@ -415,14 +372,15 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (
+  const loadItems = useCallback(async (
     term = query,
     append = false,
     mode = feedMode,
     locationPoint = userLocation,
     filters = { cuisine: cuisineFilter, rating: minRating, sort: searchSort },
   ) => {
-    const offset = append ? items.length : 0;
+    const requestId = ++feedRequestRef.current;
+    const offset = append ? itemsLengthRef.current : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
 
@@ -448,6 +406,7 @@ const Index = () => {
         },
       }), 12000, "Feed request");
     } catch (error) {
+      if (requestId !== feedRequestRef.current) return;
       const message = error instanceof Error ? error.message : "The feed took too long to respond.";
       setFeedError(message);
       toast({ title: "Feed unavailable", description: message, variant: "destructive" });
@@ -459,6 +418,7 @@ const Index = () => {
     }
 
     const { data, error } = result;
+    if (requestId !== feedRequestRef.current) return;
     if (error || data?.error) {
       setFeedError(data?.error ?? error?.message ?? "Try again.");
       toast({ title: "Feed unavailable", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
@@ -475,7 +435,7 @@ const Index = () => {
     else setItems(rows);
     setLoading(false);
     setLoadingMore(false);
-  };
+  }, [cuisineFilter, feedMode, minRating, query, searchSort, toast, userLocation]);
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") ?? "";
@@ -486,8 +446,15 @@ const Index = () => {
     setSearchSort(nextSort);
     setCuisineFilter(nextCuisine);
     setMinRating(nextRating);
-    void loadItems(nextQuery, false, feedMode, userLocation, { cuisine: nextCuisine, rating: nextRating, sort: nextSort });
-  }, [searchParams, feedMode]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (view !== "discover" || selectedSlug || listSlug) return;
+    const handle = window.setTimeout(() => {
+      void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [view, selectedSlug, listSlug, query, feedMode, userLocation, cuisineFilter, minRating, searchSort, loadItems]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -539,16 +506,7 @@ const Index = () => {
     if (cuisineFilter !== "all") params.set("cuisine", cuisineFilter);
     if (minRating !== "0") params.set("rating", minRating);
     navigate(`/search?${params.toString()}`);
-    void loadItems(query, false, feedMode, userLocation);
   };
-
-  useEffect(() => {
-    if (view !== "discover" || selectedItem || listSlug) return;
-    const handle = window.setTimeout(() => {
-      void loadItems(query, false, feedMode, userLocation);
-    }, 220);
-    return () => window.clearTimeout(handle);
-  }, [query, searchSort, cuisineFilter, minRating]);
 
   const applySearchSuggestion = (value: string) => {
     setQuery(value);
@@ -583,7 +541,6 @@ const Index = () => {
       const locationPoint = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setUserLocation(locationPoint);
       setFeedMode("nearby");
-      void loadItems(query, false, "nearby", locationPoint);
       void loadNearbyRestaurants(locationPoint);
     },
     () => toast({ title: "Location unavailable", description: "You can still browse by city and restaurant.", variant: "destructive" }),
@@ -631,6 +588,7 @@ const Index = () => {
   };
 
   const captureReviewPhoto = async () => {
+    const [{ Capacitor }, { Camera, CameraResultType, CameraSource }] = await Promise.all([import("@capacitor/core"), import("@capacitor/camera")]);
     if (!Capacitor.isNativePlatform()) return cameraInputRef.current?.click();
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
@@ -643,6 +601,7 @@ const Index = () => {
   };
 
   const selectPhotos = async () => {
+    const [{ Capacitor }, { Camera }] = await Promise.all([import("@capacitor/core"), import("@capacitor/camera")]);
     if (!Capacitor.isNativePlatform()) return photoLibraryInputRef.current?.click();
     try {
       const result = await Camera.pickImages({ quality: 85, limit: 6 });
@@ -675,7 +634,7 @@ const Index = () => {
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
-      {authPrompt && <AuthModal onClose={() => setAuthPrompt(null)} />}
+      {authPrompt && <Suspense fallback={null}><AuthModal onClose={() => setAuthPrompt(null)} /></Suspense>}
       {favoriteTarget && <SaveToListModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 w-full max-w-full border-b border-border/50 bg-background/72 backdrop-blur-2xl">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
