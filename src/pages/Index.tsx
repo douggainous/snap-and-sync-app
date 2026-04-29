@@ -12,6 +12,7 @@ import {
   Compass,
   Footprints,
   Heart,
+  Eye,
   Loader2,
   LocateFixed,
   LogIn,
@@ -276,27 +277,22 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
   };
 
   return (
-    <article className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/60">
-      <div className="group relative block min-h-[74vh] overflow-hidden bg-secondary sm:min-h-[680px]">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" width={960} height={1280} /> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/18 to-background/5" />
-        <div className="absolute left-4 top-4 soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating}</div>
-        <div className="absolute bottom-0 left-0 right-16 p-4 pb-6 text-foreground sm:p-7">
-          <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/78 px-3 py-1 text-xs font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</span></p>
-          <a href={`/items/${item.slug}`} className="block"><h2 className="font-display text-4xl font-black leading-[0.95] sm:text-6xl">{item.name}</h2></a>
-          {item.description && <p className="mt-2 line-clamp-1 max-w-2xl text-sm font-semibold text-foreground/78 sm:text-base">{item.description}</p>}
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-foreground/80"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span><span>·</span><span>{item.photo_count} photos</span></div>
-        </div>
-        <div className="absolute bottom-5 right-3 flex flex-col gap-3">
-          <button type="button" className={cn("thumb-action", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Favorite dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
-          <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
-          <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); void shareItem(); }} aria-label="Share dish"><Share2 className="size-5" /></button>
-        </div>
+    <article className="feed-reel group relative min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:min-h-[760px] md:rounded-[32px]">
+      {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" width={960} height={1280} /> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/28 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background/55 to-transparent" />
+      <a href={`/items/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
+      <div className="pointer-events-none absolute left-4 top-4 soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</div>
+      <div className="absolute bottom-0 left-0 right-16 p-4 pb-7 text-foreground sm:p-7">
+        <p className="pointer-events-none mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/62 px-3 py-1 text-[11px] font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
+        <a href={`/items/${item.slug}`} className="relative z-10 block"><h2 className="font-display text-3xl font-black leading-none sm:text-5xl">{item.name}</h2></a>
+        <div className="pointer-events-none mt-2 flex items-center gap-2 text-xs font-bold text-foreground/78"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span></div>
       </div>
-      <div className="flex gap-2 overflow-x-auto px-3 py-3 sm:px-5">
-        {item.review_count > 0 ? <Button size="sm" className="shrink-0 rounded-full" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" className="shrink-0 rounded-full" onClick={() => onFirstReview?.(item)}><Star />Review first</Button>}
-        <Button asChild variant="outline" size="sm" className="shrink-0 rounded-full"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button>
-        {item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0">{tag}</span>)}
+      <div className="absolute bottom-6 right-3 z-10 flex flex-col gap-3">
+        <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onSave(item); }} aria-label="Save dish"><Heart className="size-5" /></button>
+        <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
+        <a className="thumb-action" href={`/items/${item.slug}`} aria-label="View dish details"><Eye className="size-5" /></a>
+        {item.review_count === 0 && <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onFirstReview?.(item); }} aria-label="Review first"><Star className="size-5" /></button>}
       </div>
     </article>
   );
