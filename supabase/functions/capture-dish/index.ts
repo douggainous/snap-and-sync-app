@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
 const BodySchema = z.object({
   dishName: z.string().trim().min(2).max(120),
@@ -39,7 +40,10 @@ const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
-const sha256Hex = async (bytes: Uint8Array) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+const sha256Hex = async (bytes: Uint8Array) => {
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
