@@ -589,6 +589,7 @@ const Index = () => {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setSearchPanelOpen(false);
+    setView("search");
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (searchSort !== "relevance") params.set("sort", searchSort);
@@ -599,6 +600,7 @@ const Index = () => {
 
   const applySearchSuggestion = (value: string) => {
     setQuery(value);
+    setView("search");
     navigate(`/search?q=${encodeURIComponent(value)}`);
   };
 
