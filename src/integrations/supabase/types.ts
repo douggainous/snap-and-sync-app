@@ -92,6 +92,63 @@ export type Database = {
         }
         Relationships: []
       }
+      dish_ai_recognitions: {
+        Row: {
+          confidence: number | null
+          confidence_level: string
+          created_at: string
+          cuisine: string | null
+          dish_id: string | null
+          dish_name: string | null
+          error: string | null
+          id: string
+          image_hash: string
+          ingredients: string[]
+          photo_id: string | null
+          raw_result: Json
+          status: string
+          tags: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number | null
+          confidence_level?: string
+          created_at?: string
+          cuisine?: string | null
+          dish_id?: string | null
+          dish_name?: string | null
+          error?: string | null
+          id?: string
+          image_hash: string
+          ingredients?: string[]
+          photo_id?: string | null
+          raw_result?: Json
+          status?: string
+          tags?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number | null
+          confidence_level?: string
+          created_at?: string
+          cuisine?: string | null
+          dish_id?: string | null
+          dish_name?: string | null
+          error?: string | null
+          id?: string
+          image_hash?: string
+          ingredients?: string[]
+          photo_id?: string | null
+          raw_result?: Json
+          status?: string
+          tags?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dish_share_events: {
         Row: {
           created_at: string
@@ -940,8 +997,10 @@ export type Database = {
       photos: {
         Row: {
           ai_confidence: number | null
+          ai_cuisine: string | null
           ai_dish_name: string | null
           ai_error: string | null
+          ai_ingredients: string[]
           ai_status: string
           ai_tags: string[]
           alt_text: string | null
@@ -949,6 +1008,7 @@ export type Database = {
           dish_id: string
           height: number | null
           id: string
+          image_hash: string | null
           image_url: string | null
           is_public: boolean
           review_id: string | null
@@ -960,8 +1020,10 @@ export type Database = {
         }
         Insert: {
           ai_confidence?: number | null
+          ai_cuisine?: string | null
           ai_dish_name?: string | null
           ai_error?: string | null
+          ai_ingredients?: string[]
           ai_status?: string
           ai_tags?: string[]
           alt_text?: string | null
@@ -969,6 +1031,7 @@ export type Database = {
           dish_id: string
           height?: number | null
           id?: string
+          image_hash?: string | null
           image_url?: string | null
           is_public?: boolean
           review_id?: string | null
@@ -980,8 +1043,10 @@ export type Database = {
         }
         Update: {
           ai_confidence?: number | null
+          ai_cuisine?: string | null
           ai_dish_name?: string | null
           ai_error?: string | null
+          ai_ingredients?: string[]
           ai_status?: string
           ai_tags?: string[]
           alt_text?: string | null
@@ -989,6 +1054,7 @@ export type Database = {
           dish_id?: string
           height?: number | null
           id?: string
+          image_hash?: string | null
           image_url?: string | null
           is_public?: boolean
           review_id?: string | null
