@@ -1155,8 +1155,6 @@ export type Database = {
         Args: { _menu_item_id: string }
         Returns: undefined
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       slugify: { Args: { value: string }; Returns: string }
     }
     Enums: {
