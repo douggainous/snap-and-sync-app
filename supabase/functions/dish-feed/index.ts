@@ -129,6 +129,8 @@ type Sponsorship = {
   target_city?: string | null;
 };
 
+type DishTagRow = { dish_id: string; category?: string | null; confidence?: number | null; tags?: { name?: string | null } | null };
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -183,6 +185,22 @@ function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, res
   const city = (restaurant?.city ?? "").toLowerCase();
   return (!sponsor.target_cuisine || cuisine.includes(sponsor.target_cuisine.toLowerCase()))
     && (!sponsor.target_city || city.includes(sponsor.target_city.toLowerCase()));
+}
+
+function tagRankingBoost(tags: DishTagRow[], trend?: TrendMetric) {
+  let boost = 0;
+  const seen = new Set<string>();
+  for (const row of tags) {
+    const name = row.tags?.name?.toLowerCase().trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const confidence = Math.min(1, Math.max(0, Number(row.confidence ?? 0.7)));
+    if (row.category === "cuisine" || row.category === "dish_type") boost += 1.6 * confidence;
+    if (row.category === "flavor") boost += 1.1 * confidence;
+  }
+  if (trend?.status === "viral") boost += 3;
+  else if (trend?.status === "trending") boost += 1.5;
+  return Math.min(8, boost);
 }
 
 function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS, trend?: TrendMetric) {
