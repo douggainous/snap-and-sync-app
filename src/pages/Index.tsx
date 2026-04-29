@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, KeyboardEvent, lazy, MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -46,9 +46,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
-import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
+const AuthModal = lazy(() => import("@/components/AuthModal"));
 
 type View = "discover" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
