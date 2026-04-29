@@ -33,6 +33,55 @@ function json(data: unknown, status = 200) {
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "tag";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
+async function refreshTasteProfile(supabase: ReturnType<typeof createClient>, userId: string) {
+  const cuisineScores: Record<string, number> = {};
+  const tagScores: Record<string, number> = {};
+  const engagementCounts: Record<string, number> = {};
+  const addCuisine = (value?: string | null, score = 1) => {
+    const key = value?.toLowerCase().trim();
+    if (key) cuisineScores[key] = Number(((cuisineScores[key] ?? 0) + score).toFixed(2));
+  };
+  const addTag = (value?: string | null, score = 1) => {
+    const key = value?.toLowerCase().trim();
+    if (key) tagScores[key] = Number(((tagScores[key] ?? 0) + score).toFixed(2));
+  };
+
+  const { data: profile } = await supabase.from("profiles").select("favorite_cuisines").eq("user_id", userId).maybeSingle();
+  for (const cuisine of ((profile?.favorite_cuisines ?? []) as string[])) addCuisine(cuisine, 5);
+
+  const { data: saved } = await supabase.from("saved_items").select("action_type,updated_at,dishes(id,cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(140);
+  const engagedDishIds = new Set<string>();
+  let lastInteractionAt: string | null = null;
+  for (const row of (saved ?? []) as { action_type: string; updated_at?: string | null; dishes?: { id?: string; cuisine?: string | null } | null }[]) {
+    const weight = row.action_type === "favorite" ? 4 : row.action_type === "want_to_try" ? 2.4 : 1.6;
+    addCuisine(row.dishes?.cuisine, weight);
+    if (row.dishes?.id) engagedDishIds.add(row.dishes.id);
+    engagementCounts[row.action_type] = (engagementCounts[row.action_type] ?? 0) + 1;
+    if (!lastInteractionAt && row.updated_at) lastInteractionAt = row.updated_at;
+  }
+
+  const { data: ratings } = await supabase.from("ratings").select("dish_id,rating,updated_at,dishes(cuisine)").eq("user_id", userId).order("updated_at", { ascending: false }).limit(120);
+  for (const row of (ratings ?? []) as { dish_id: string; rating: number; updated_at?: string | null; dishes?: { cuisine?: string | null } | null }[]) {
+    const score = Math.max(-2, Number(row.rating) - 3) * 2.6;
+    addCuisine(row.dishes?.cuisine, score);
+    if (Number(row.rating) >= 4) engagedDishIds.add(row.dish_id);
+    engagementCounts.ratings = (engagementCounts.ratings ?? 0) + 1;
+    if (!lastInteractionAt && row.updated_at) lastInteractionAt = row.updated_at;
+  }
+
+  if (engagedDishIds.size) {
+    const { data: tags } = await supabase.from("dish_tags").select("dish_id,category,confidence,tags(name)").in("dish_id", [...engagedDishIds]).gte("confidence", 0.55).limit(300);
+    for (const row of (tags ?? []) as { confidence?: number | null; category?: string | null; tags?: { name?: string | null } | null }[]) {
+      const base = row.category === "dish_type" ? 2.2 : row.category === "flavor" ? 1.8 : row.category === "cuisine" ? 1.2 : 0.8;
+      addTag(row.tags?.name, base * Number(row.confidence ?? 0.7));
+    }
+  }
+
+  const topEntries = (obj: Record<string, number>, limit: number) => Object.fromEntries(Object.entries(obj).filter(([, value]) => value > 0).sort((a, b) => b[1] - a[1]).slice(0, limit));
+  await supabase.from("user_taste_profiles").upsert({ user_id: userId, cuisine_affinity: topEntries(cuisineScores, 12), tag_affinity: topEntries(tagScores, 24), engagement_counts: engagementCounts, last_interaction_at: lastInteractionAt, refreshed_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
