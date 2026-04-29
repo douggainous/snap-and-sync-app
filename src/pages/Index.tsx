@@ -344,6 +344,7 @@ const Index = () => {
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const feedRequestRef = useRef(0);
+  const itemsLengthRef = useRef(0);
   const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -371,6 +372,8 @@ const Index = () => {
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
+
+  useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
   useEffect(() => {
     const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
@@ -422,7 +425,7 @@ const Index = () => {
     filters = { cuisine: cuisineFilter, rating: minRating, sort: searchSort },
   ) => {
     const requestId = ++feedRequestRef.current;
-    const offset = append ? items.length : 0;
+    const offset = append ? itemsLengthRef.current : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
 
@@ -477,7 +480,7 @@ const Index = () => {
     else setItems(rows);
     setLoading(false);
     setLoadingMore(false);
-  }, [cuisineFilter, feedMode, items.length, minRating, query, searchSort, toast, userLocation]);
+  }, [cuisineFilter, feedMode, minRating, query, searchSort, toast, userLocation]);
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") ?? "";
