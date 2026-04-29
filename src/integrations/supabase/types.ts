@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      dish_share_events: {
+        Row: {
+          created_at: string
+          dish_id: string
+          id: string
+          share_channel: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dish_id: string
+          id?: string
+          share_channel?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dish_id?: string
+          id?: string
+          share_channel?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       dish_tags: {
         Row: {
           created_at: string
@@ -56,6 +80,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dish_trend_metrics: {
+        Row: {
+          dish_id: string
+          is_hot_nearby: boolean
+          previous_rating_count: number
+          previous_save_count: number
+          previous_share_count: number
+          rating_velocity: number
+          recent_rating_count: number
+          recent_save_count: number
+          recent_share_count: number
+          save_velocity: number
+          share_velocity: number
+          spike_score: number
+          status: string
+          trend_score: number
+          updated_at: string
+          window_ended_at: string
+          window_started_at: string
+        }
+        Insert: {
+          dish_id: string
+          is_hot_nearby?: boolean
+          previous_rating_count?: number
+          previous_save_count?: number
+          previous_share_count?: number
+          rating_velocity?: number
+          recent_rating_count?: number
+          recent_save_count?: number
+          recent_share_count?: number
+          save_velocity?: number
+          share_velocity?: number
+          spike_score?: number
+          status?: string
+          trend_score?: number
+          updated_at?: string
+          window_ended_at?: string
+          window_started_at: string
+        }
+        Update: {
+          dish_id?: string
+          is_hot_nearby?: boolean
+          previous_rating_count?: number
+          previous_save_count?: number
+          previous_share_count?: number
+          rating_velocity?: number
+          recent_rating_count?: number
+          recent_save_count?: number
+          recent_share_count?: number
+          save_velocity?: number
+          share_velocity?: number
+          spike_score?: number
+          status?: string
+          trend_score?: number
+          updated_at?: string
+          window_ended_at?: string
+          window_started_at?: string
+        }
+        Relationships: []
       }
       dishes: {
         Row: {
@@ -1201,6 +1285,34 @@ export type Database = {
         }
       }
       refresh_dish_rollups: { Args: { _dish_id: string }; Returns: undefined }
+      refresh_dish_trend_metrics: {
+        Args: { _dish_id: string }
+        Returns: {
+          dish_id: string
+          is_hot_nearby: boolean
+          previous_rating_count: number
+          previous_save_count: number
+          previous_share_count: number
+          rating_velocity: number
+          recent_rating_count: number
+          recent_save_count: number
+          recent_share_count: number
+          save_velocity: number
+          share_velocity: number
+          spike_score: number
+          status: string
+          trend_score: number
+          updated_at: string
+          window_ended_at: string
+          window_started_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "dish_trend_metrics"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       refresh_menu_item_rating: {
         Args: { _menu_item_id: string }
         Returns: undefined
