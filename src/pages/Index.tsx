@@ -462,7 +462,13 @@ const Index = () => {
       .eq("slug", selectedSlug)
       .eq("is_published", true)
       .maybeSingle()
-      .then(({ data }) => { if (data) setItems((current) => [data as unknown as MenuItem, ...current.filter((item) => item.slug !== selectedSlug)]); });
+      .then(async ({ data }) => {
+        if (!data) return;
+        const { data: trend } = await supabase.from("dish_trend_metrics").select("trend_score,spike_score,status,is_hot_nearby,recent_share_count,recent_save_count,recent_rating_count").eq("dish_id", data.id).maybeSingle();
+        const trendLabel = trend?.status === "viral" ? "Viral" : trend?.status === "trending" ? "Trending" : null;
+        const item = { ...data, trend_status: trend?.status ?? "normal", trend_labels: [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean), trend_metrics: trend } as unknown as MenuItem;
+        setItems((current) => [item, ...current.filter((currentItem) => currentItem.slug !== selectedSlug)]);
+      });
   }, [selectedItem, selectedSlug]);
 
   const submitSearch = (event: FormEvent) => {
