@@ -745,10 +745,10 @@ const Index = () => {
         </div>
       </section>
 
-      <nav className="fixed inset-x-3 bottom-3 z-20 grid max-w-[calc(100vw-1.5rem)] grid-cols-5 items-center rounded-full glass-surface p-1.5 md:hidden">
-        {navItems.slice(0, 2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}
-        <button onClick={() => setSearchPanelOpen((open) => !open)} className={cn("mx-auto flex size-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[var(--shadow-editorial)] transition active:scale-95", searchPanelOpen && "bg-primary text-primary-foreground")} aria-label="Open search"><Search className="size-6" /></button>
-        {navItems.slice(2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" />{item.label}</button>)}
+      <nav className="fixed inset-x-3 bottom-3 z-20 grid min-w-0 grid-cols-5 items-center overflow-hidden rounded-full glass-surface p-1.5 md:hidden">
+        {navItems.slice(0, 2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
+        <button onClick={() => setSearchPanelOpen((open) => !open)} className={cn("mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[var(--shadow-editorial)] transition active:scale-95 sm:size-14", searchPanelOpen && "bg-primary text-primary-foreground")} aria-label="Open search"><Search className="size-6" /></button>
+        {navItems.slice(2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
       </nav>
     </main>
   );
