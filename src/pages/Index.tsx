@@ -720,8 +720,10 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
     const url = menuItemUrl(item.slug);
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
     else await navigator.clipboard.writeText(url);
+    void supabase.functions.invoke("dish-interaction", { body: { type: "share", dishId: item.id, channel: navigator.share ? "native" : "clipboard" } });
   };
-  const isTrending = item.aggregate_rating >= 4.5 || (item.review_count ?? 0) >= 10 || (item.favorite_count ?? 0) >= 10;
+  const trendLabel = item.trend_labels?.[0];
+  const isTrending = Boolean(trendLabel) || item.aggregate_rating >= 4.5 || (item.review_count ?? 0) >= 10 || (item.favorite_count ?? 0) >= 10;
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   return (
     <section className="-mx-3 space-y-4 md:mx-0">
@@ -731,7 +733,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
           {!item.cover_image_url && <div className="flex h-[calc(100svh-108px)] min-h-[620px] w-full shrink-0 snap-center items-center justify-center bg-secondary md:h-[760px]"><ChefHat className="size-20 opacity-40" /></div>}
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/24 to-background/20" />
-        <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-2">{isTrending ? <span className="soft-chip text-accent"><Sparkles className="size-4" />Trending</span> : <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}<Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div>
+        <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-2">{isTrending ? <span className="soft-chip text-accent"><Sparkles className="size-4" />{trendLabel ?? "Trending"}</span> : <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}<Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div>
         <div className="absolute inset-x-0 bottom-0 space-y-4 p-4 pb-6 md:p-7">
           <div><h1 className="font-display text-5xl font-black leading-[0.9] md:text-7xl">{item.name}</h1>{item.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/75">{item.description}</p>}</div>
           <div className="flex items-end justify-between gap-4"><div><p className="font-display text-5xl font-black text-accent">{item.aggregate_rating.toFixed(1)}<span className="text-2xl">★</span></p><p className="text-xs font-bold text-foreground/70">{item.review_count} reviews · {formatPrice(item)}</p></div><div className="flex gap-2"><button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={() => onDishAction(item, "favorite", !item.user_favorite)} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button><button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button></div></div>
