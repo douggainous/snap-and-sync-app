@@ -89,8 +89,11 @@ type MenuItem = {
   price_max?: number | null;
   currency: string;
   aggregate_rating: number;
+  rating_count?: number;
   review_count: number;
   photo_count: number;
+  want_to_try_count?: number;
+  favorite_count?: number;
   cover_image_url?: string | null;
   restaurants?: Restaurant | null;
 };
@@ -327,7 +330,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const FeedItemCard = ({ item, userLocation, onSave, onFirstReview }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite") => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -356,7 +359,8 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview }: { item: Men
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {item.review_count > 0 ? <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" onClick={() => onFirstReview?.(item)}><Star />Be first to review this!</Button>}
-          <Button variant="outline" size="sm" onClick={() => onSave(item)}><Bookmark />Favorite</Button>
+          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "want_to_try")}><Bookmark />Want to try {item.want_to_try_count ? `· ${item.want_to_try_count}` : ""}</Button>
+          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "favorite")}><Heart />Favorite {item.favorite_count ? `· ${item.favorite_count}` : ""}</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
         </div>
@@ -527,6 +531,15 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
+  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite") => {
+    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
+    if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled: true } });
+    if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
+    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish } : row));
+    toast({ title: action === "favorite" ? "Favorited" : "Saved to want to try", description: "Your dish interaction is stored." });
+  };
+
   const startFirstReview = (item: MenuItem) => {
     setScanRestaurant(item.restaurants?.name ?? "");
     setScanDish(item.name);
@@ -632,7 +645,7 @@ const Index = () => {
               </section>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
@@ -819,25 +832,9 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { error } = await supabase.from("menu_item_reviews").insert({
-      menu_item_id: item.id,
-      restaurant_id: item.restaurants?.id ?? null,
-      user_id: sessionUser.id,
-      rating: parsed.data.rating,
-      review: parsed.data.review || null,
-      price_paid: parsed.data.price_paid ?? null,
-      currency: item.currency || "USD",
-      tags: cleanTags,
-      would_order_again: parsed.data.would_order_again,
-      temperature_rating: parsed.data.temperature_rating,
-      spiciness_rating: parsed.data.spiciness_rating,
-      sweet_savory_rating: parsed.data.sweet_savory_rating,
-      flavor_intensity_rating: parsed.data.flavor_intensity_rating,
-      is_public: true,
-    });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null } });
     setSaving(false);
-    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
+    if (error || data?.error) return toast({ title: "Review not published", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
     setReview("");
     setPricePaid("");
