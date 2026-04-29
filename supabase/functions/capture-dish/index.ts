@@ -42,6 +42,9 @@ const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
 const normalizeName = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+const CUISINES = new Set(["italian", "japanese", "mexican", "chinese", "thai", "indian", "korean", "french", "greek", "spanish", "american", "vietnamese", "mediterranean"]);
+const DISH_TYPES = new Set(["steak", "dessert", "pasta", "ramen", "sushi", "taco", "pizza", "burger", "salad", "soup", "curry", "seafood", "noodles", "sandwich"]);
+const FLAVOR_TAGS = new Set(["spicy", "sweet", "savory", "crispy", "smoky", "tangy", "creamy", "rich", "fresh", "umami"]);
 const tokenSet = (value: string) => new Set(normalizeName(value).split(" ").filter((token) => token.length > 1));
 const jaccard = (a: Set<string>, b: Set<string>) => {
   const union = new Set([...a, ...b]);
@@ -86,6 +89,34 @@ async function recognizeDish(imageBase64: string, mimeType: string, context: { d
   const parsed = JSON.parse(toolArgs) as { dishName?: string; cuisine?: string; tags?: string[]; ingredients?: string[]; confidence?: number };
   const confidence = typeof parsed.confidence === "number" ? parsed.confidence : null;
   return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, cuisine: parsed.cuisine?.trim().slice(0, 80) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), ingredients: [...new Set((parsed.ingredients ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence, confidenceLevel: confidenceLevel(confidence), rawResult: parsed, error: null };
+}
+
+function tagCategory(tag: string, cuisine?: string | null) {
+  const clean = cleanTag(tag);
+  if (clean && (CUISINES.has(clean) || clean === cleanTag(cuisine ?? ""))) return "cuisine";
+  if (DISH_TYPES.has(clean) || [...DISH_TYPES].some((type) => clean.includes(type))) return "dish_type";
+  if (FLAVOR_TAGS.has(clean)) return "flavor";
+  return "general";
+}
+
+function behaviorTags(input: { metrics?: z.infer<typeof BodySchema>["metrics"]; rating?: number; dishName: string }) {
+  const tags: string[] = [];
+  if ((input.metrics?.spiciness ?? 0) >= 4) tags.push("spicy");
+  if ((input.metrics?.sweetSavory ?? 3) <= 2) tags.push("sweet");
+  if ((input.metrics?.sweetSavory ?? 3) >= 4) tags.push("savory");
+  if ((input.metrics?.flavorIntensity ?? 0) >= 4) tags.push("rich");
+  for (const type of DISH_TYPES) if (normalizeName(input.dishName).includes(type)) tags.push(type);
+  return [...new Set(tags)].slice(0, 4);
+}
+
+async function upsertDishTags(supabase: ReturnType<typeof createClient>, dishId: string, userId: string, tags: string[], options: { source: "user" | "ai" | "behavior"; confidence: number; cuisine?: string | null }) {
+  const cleanTags = [...new Set(tags.map(cleanTag).filter(Boolean))].slice(0, 10);
+  for (const tagName of cleanTags) {
+    const category = tagCategory(tagName, options.cuisine);
+    const tagSlug = slugify(tagName);
+    const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug, category, source: options.source, confidence: options.confidence }, { onConflict: "slug" }).select("id").single();
+    if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dishId, tag_id: tag.id, created_by: userId, source: options.source, confidence: options.confidence, category });
+  }
 }
 
 async function findDishMatch(supabase: ReturnType<typeof createClient>, input: { dishName: string; tags: string[]; restaurantId: string | null; imageHash: string | null }) {
@@ -240,13 +271,11 @@ serve(async (req) => {
           const ai = await recognizeDish(images[0].imageBase64, images[0].mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
           await supabase.from("dish_ai_recognitions").update({ status: ai.status, dish_name: ai.dishName, cuisine: ai.cuisine, tags: ai.tags, ingredients: ai.ingredients, confidence: ai.confidence, confidence_level: ai.confidenceLevel, raw_result: ai.rawResult, error: ai.error }).eq("image_hash", firstImageHash);
           await supabase.from("photos").update({ ai_dish_name: ai.dishName, ai_cuisine: ai.cuisine, ai_tags: ai.tags, ai_ingredients: ai.ingredients, ai_confidence: ai.confidence, ai_status: ai.status, ai_error: ai.error }).eq("id", photos[0].id);
+          if (ai.status === "completed" && ["high", "medium"].includes(ai.confidenceLevel)) {
+            const aiTags = [...new Set([ai.cuisine, ...ai.tags].map((tag) => cleanTag(tag ?? "")).filter(Boolean))].slice(0, ai.confidenceLevel === "high" ? 8 : 5);
+            await upsertDishTags(supabase, dish.id, user.id, aiTags, { source: "ai", confidence: ai.confidenceLevel === "high" ? 0.9 : 0.68, cuisine: ai.cuisine });
+          }
           if (ai.status === "completed" && ai.confidenceLevel === "high") {
-            const allTags = [...new Set([...(input.tags ?? []), ...ai.tags].map(cleanTag).filter(Boolean))].slice(0, 8);
-            for (const tagName of allTags) {
-              const tagSlug = slugify(tagName);
-              const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
-              if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
-            }
             await supabase.from("dishes").update({ cuisine: ai.cuisine ?? null }).eq("id", dish.id).is("cuisine", null);
           }
         })());
@@ -285,12 +314,8 @@ serve(async (req) => {
       }
     }
 
-    const allTags = [...new Set(input.tags.map(cleanTag).filter(Boolean))].slice(0, 8);
-    for (const tagName of allTags) {
-      const tagSlug = slugify(tagName);
-      const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
-      if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
-    }
+    await upsertDishTags(supabase, dish.id, user.id, input.tags, { source: "user", confidence: 0.78, cuisine: null });
+    await upsertDishTags(supabase, dish.id, user.id, behaviorTags({ metrics: input.metrics, rating: input.rating, dishName: input.dishName }), { source: "behavior", confidence: 0.74, cuisine: null });
 
     return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, dishMatch: shouldUseMatch && dishMatch ? { status: "matched", dishId: dishMatch.dishId, dishName: dishMatch.dishName, score: dishMatch.score, reasons: dishMatch.reasons } : input.forceNewDish && dishMatch ? { status: "user_override", dishId: dish.id, dishName: dish.name, score: dishMatch.score, reasons: dishMatch.reasons } : { status: "created_new", dishId: dish.id, dishName: dish.name, score: null, reasons: [] }, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
   } catch (error) {

@@ -250,21 +250,30 @@ export type Database = {
       }
       dish_tags: {
         Row: {
+          category: string
+          confidence: number
           created_at: string
           created_by: string | null
           dish_id: string
+          source: string
           tag_id: string
         }
         Insert: {
+          category?: string
+          confidence?: number
           created_at?: string
           created_by?: string | null
           dish_id: string
+          source?: string
           tag_id: string
         }
         Update: {
+          category?: string
+          confidence?: number
           created_at?: string
           created_by?: string | null
           dish_id?: string
+          source?: string
           tag_id?: string
         }
         Relationships: [
@@ -1713,22 +1722,31 @@ export type Database = {
       }
       tags: {
         Row: {
+          category: string
+          confidence: number
           created_at: string
           id: string
           name: string
           slug: string
+          source: string
         }
         Insert: {
+          category?: string
+          confidence?: number
           created_at?: string
           id?: string
           name: string
           slug: string
+          source?: string
         }
         Update: {
+          category?: string
+          confidence?: number
           created_at?: string
           id?: string
           name?: string
           slug?: string
+          source?: string
         }
         Relationships: []
       }
