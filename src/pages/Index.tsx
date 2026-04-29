@@ -169,6 +169,7 @@ const parseSearchSort = (value: string | null): SearchSort => ["relevance", "tre
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, trend?: Record<string, unknown> | null): MenuItem => {
   const trendLabel = trend?.status === "viral" ? "Viral" : trend?.status === "trending" ? "Trending" : null;
+  const incomingLabels = Array.isArray(row.trend_labels) ? row.trend_labels.filter((label): label is string => typeof label === "string") : [];
   return {
     ...(row as MenuItem),
     id: String(row.id ?? ""),
@@ -184,7 +185,7 @@ const normalizeMenuItem = (row: Partial<MenuItem> & Record<string, unknown>, tre
     want_to_try_count: Number(row.want_to_try_count ?? 0),
     favorite_count: Number(row.favorite_count ?? 0),
     trend_status: trend?.status === "viral" || trend?.status === "trending" ? trend.status : "normal",
-    trend_labels: [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
+    trend_labels: incomingLabels.length ? incomingLabels : [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean) as string[],
     trend_metrics: trend ?? null,
   };
 };
@@ -254,7 +255,7 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
 
 const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const trendLabel = item.trend_labels?.[0];
+  const trendLabels = item.trend_labels ?? [];
 
   return (
     <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:w-full md:max-w-full md:min-h-[760px] md:rounded-[32px]">
@@ -262,7 +263,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background/55 to-transparent" />
       <a href={`/items/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
-      <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2"><span className="soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabel && <span className="soft-chip text-accent"><Sparkles className="size-4" />{trendLabel}</span>}</div>
+      <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2"><span className="soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabels.map((label) => <span key={label} className="soft-chip text-accent"><Sparkles className="size-4" />{label}</span>)}</div>
       <div className="absolute bottom-0 left-0 right-16 p-4 pb-7 text-foreground sm:p-7">
         <p className="pointer-events-none mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/62 px-3 py-1 text-[11px] font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
         <a href={`/items/${item.slug}`} className="relative z-10 block min-w-0"><h2 className="break-words font-display text-3xl font-black leading-none sm:text-5xl">{item.name}</h2></a>
@@ -280,8 +281,8 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
 
 const SearchDishCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const trendLabel = item.trend_labels?.[0];
-  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/items/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-3 top-3 soft-chip text-accent"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabel && <span className="absolute left-3 top-14 soft-chip text-accent"><Sparkles className="size-3" />{trendLabel}</span>}<button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><div className="absolute inset-x-0 bottom-0 p-3"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/72">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
+  const trendLabels = item.trend_labels ?? [];
+  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/items/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><div className="absolute left-3 top-3 flex max-w-[calc(100%-4rem)] flex-wrap gap-1.5"><span className="soft-chip text-accent"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span>{trendLabels.map((label) => <span key={label} className="soft-chip text-accent"><Sparkles className="size-3" />{label}</span>)}</div><button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><div className="absolute inset-x-0 bottom-0 p-3"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/72">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
 };
 
 const ItemCard = FeedItemCard;
@@ -756,6 +757,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
     void supabase.functions.invoke("dish-interaction", { body: { type: "share", dishId: item.id, channel: "copy_link" } });
   };
   const trendLabel = item.trend_labels?.[0];
+  const trendLabels = item.trend_labels ?? [];
   const isTrending = Boolean(trendLabel) || item.aggregate_rating >= 4.5 || (item.review_count ?? 0) >= 10 || (item.favorite_count ?? 0) >= 10;
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   return (
@@ -766,7 +768,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
           {!item.cover_image_url && <div className="flex h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center items-center justify-center bg-secondary sm:min-h-[620px] md:h-[760px]"><ChefHat className="size-20 opacity-40" /></div>}
         </div>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/24 to-background/20" />
-        <div className="absolute left-4 right-4 top-4 flex items-center justify-between gap-2"><div className="flex min-w-0 gap-2">{isTrending ? <span className="soft-chip text-accent"><Sparkles className="size-4" />{trendLabel ?? "Trending"}</span> : <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}</div><div className="flex gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
+        <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2"><div className="flex min-w-0 flex-wrap gap-2">{trendLabels.length ? trendLabels.map((label) => <span key={label} className="soft-chip text-accent"><Sparkles className="size-4" />{label}</span>) : isTrending ? <span className="soft-chip text-accent"><Sparkles className="size-4" />Trending</span> : <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}</div><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-background/70 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
         <div className="absolute inset-x-0 bottom-0 space-y-4 p-4 pb-28 md:p-7 lg:pb-7">
           <div className="min-w-0"><h1 className="break-words font-display text-4xl font-black leading-[0.92] sm:text-5xl md:text-7xl">{item.name}</h1>{item.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/75">{item.description}</p>}</div>
           <div className="flex min-w-0 flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="font-display text-4xl font-black text-accent sm:text-5xl">{item.aggregate_rating.toFixed(1)}<span className="text-2xl">★</span></p><p className="text-xs font-bold text-foreground/70">{item.review_count} reviews · {formatPrice(item)}</p></div><div className="flex gap-2"><button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={() => onDishAction(item, "favorite", !item.user_favorite)} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button><button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button></div></div>

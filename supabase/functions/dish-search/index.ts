@@ -70,12 +70,17 @@ type DishRow = {
 type TrendMetric = {
   dish_id: string;
   recent_save_count: number;
+  recent_favorite_count?: number;
   recent_rating_count: number;
+  recent_review_count?: number;
   recent_share_count: number;
   save_velocity: number;
+  favorite_velocity?: number;
   rating_velocity: number;
+  review_velocity?: number;
   share_velocity: number;
   spike_score: number;
+  location_spike_score?: number;
   trend_score: number;
   status: string;
   is_hot_nearby: boolean;
@@ -133,7 +138,7 @@ function engagementScore(dish: DishRow) {
 function trendBoost(metric?: TrendMetric) {
   if (!metric) return 0;
   const statusBoost = metric.status === "viral" ? 36 : metric.status === "trending" ? 18 : 0;
-  return Number(metric.trend_score ?? 0) * 1.05 + Number(metric.spike_score ?? 0) * 1.55 + Number(metric.recent_rating_count ?? 0) * 2 + Number(metric.recent_save_count ?? 0) * 1.6 + Math.max(0, Number(metric.rating_velocity ?? 0)) * 2 + Math.max(0, Number(metric.save_velocity ?? 0)) * 1.7 + statusBoost;
+  return Number(metric.trend_score ?? 0) * 1.05 + Number(metric.spike_score ?? 0) * 1.55 + Number(metric.location_spike_score ?? 0) * 0.8 + Number(metric.recent_rating_count ?? 0) * 2 + Number(metric.recent_review_count ?? 0) * 1.8 + Number(metric.recent_save_count ?? 0) * 1.6 + Number(metric.recent_favorite_count ?? 0) * 2.6 + Math.max(0, Number(metric.rating_velocity ?? 0)) * 2 + Math.max(0, Number(metric.review_velocity ?? 0)) * 1.8 + Math.max(0, Number(metric.save_velocity ?? 0)) * 1.7 + Math.max(0, Number(metric.favorite_velocity ?? 0)) * 2.6 + statusBoost;
 }
 
 function preferenceBoost(dish: DishRow, userSignals: UserSignals) {
@@ -291,7 +296,7 @@ serve(async (req) => {
     }
 
     if (dishIds.length) {
-      const { data: trends, error } = await supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_rating_count,recent_share_count,save_velocity,rating_velocity,share_velocity,spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds);
+      const { data: trends, error } = await supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_favorite_count,recent_rating_count,recent_review_count,recent_share_count,save_velocity,favorite_velocity,rating_velocity,review_velocity,share_velocity,spike_score,location_spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds);
       if (error) console.error("trend metric lookup failed", error);
       for (const trend of (trends ?? []) as TrendMetric[]) trendByDishId.set(trend.dish_id, trend);
     }
@@ -306,7 +311,7 @@ serve(async (req) => {
       const trend = trendByDishId.get(dish.id);
       const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) + trendBoost(trend) + preferenceBoost(dish, userSignals) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
-      const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && origin ? "Hot near you" : null].filter(Boolean);
+      const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
       return {
         ...dish,
