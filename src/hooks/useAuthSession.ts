@@ -27,6 +27,15 @@ const ensureUserRecord = async (user: User) => {
   if (error) console.warn("Profile sync failed", error.message);
 };
 
+const deferProfileSync = (user: User) => {
+  const run = () => void ensureUserRecord(user).catch((error) => console.warn("Profile sync failed", error));
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    window.setTimeout(run, 0);
+  }
+};
+
 export const useAuthSession = () => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -39,7 +48,7 @@ export const useAuthSession = () => {
       }
 
       setUser(userFromAuth(authUser));
-      await ensureUserRecord(authUser).catch((error) => console.warn("Profile sync failed", error));
+      deferProfileSync(authUser);
     };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
