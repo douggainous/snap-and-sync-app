@@ -10,7 +10,7 @@ const corsHeaders = {
 const BodySchema = z.object({
   dishId: z.string().uuid(),
   imageBase64: z.string().min(100).max(12_000_000),
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]),
   fileName: z.string().trim().max(160).optional(),
   altText: z.string().trim().max(200).optional(),
 });
@@ -19,7 +19,7 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
 
-const extensionFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+const extensionFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const safeName = (value?: string) => (value ?? "food-photo").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "food-photo";
 
 serve(async (req) => {
