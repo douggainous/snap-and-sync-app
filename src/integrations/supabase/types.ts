@@ -1221,6 +1221,189 @@ export type Database = {
           },
         ]
       }
+      restaurant_boost_requests: {
+        Row: {
+          budget_cents: number | null
+          claim_id: string | null
+          created_at: string
+          dish_id: string
+          ends_at: string | null
+          id: string
+          note: string | null
+          requested_boost_score: number
+          restaurant_id: string | null
+          starts_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget_cents?: number | null
+          claim_id?: string | null
+          created_at?: string
+          dish_id: string
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          requested_boost_score?: number
+          restaurant_id?: string | null
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget_cents?: number | null
+          claim_id?: string | null
+          created_at?: string
+          dish_id?: string
+          ends_at?: string | null
+          id?: string
+          note?: string | null
+          requested_boost_score?: number
+          restaurant_id?: string | null
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      restaurant_claims: {
+        Row: {
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string
+          id: string
+          restaurant_id: string | null
+          restaurant_name: string
+          reviewed_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          verification_note: string | null
+          website_url: string | null
+        }
+        Insert: {
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          restaurant_id?: string | null
+          restaurant_name: string
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          verification_note?: string | null
+          website_url?: string | null
+        }
+        Update: {
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          restaurant_id?: string | null
+          restaurant_name?: string
+          reviewed_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          verification_note?: string | null
+          website_url?: string | null
+        }
+        Relationships: []
+      }
+      restaurant_dish_submissions: {
+        Row: {
+          claim_id: string | null
+          created_at: string
+          cuisine: string | null
+          description: string | null
+          dish_id: string | null
+          dish_name: string
+          id: string
+          note: string | null
+          restaurant_id: string | null
+          status: string
+          typical_price: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          claim_id?: string | null
+          created_at?: string
+          cuisine?: string | null
+          description?: string | null
+          dish_id?: string | null
+          dish_name: string
+          id?: string
+          note?: string | null
+          restaurant_id?: string | null
+          status?: string
+          typical_price?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          claim_id?: string | null
+          created_at?: string
+          cuisine?: string | null
+          description?: string | null
+          dish_id?: string | null
+          dish_name?: string
+          id?: string
+          note?: string | null
+          restaurant_id?: string | null
+          status?: string
+          typical_price?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      restaurant_official_photos: {
+        Row: {
+          caption: string | null
+          claim_id: string | null
+          created_at: string
+          dish_id: string
+          id: string
+          image_url: string | null
+          restaurant_id: string | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          claim_id?: string | null
+          created_at?: string
+          dish_id: string
+          id?: string
+          image_url?: string | null
+          restaurant_id?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          claim_id?: string | null
+          created_at?: string
+          dish_id?: string
+          id?: string
+          image_url?: string | null
+          restaurant_id?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       restaurants: {
         Row: {
           address: string | null
@@ -1547,6 +1730,10 @@ export type Database = {
         Returns: undefined
       }
       slugify: { Args: { value: string }; Returns: string }
+      user_has_approved_restaurant_claim: {
+        Args: { _restaurant_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       post_visibility: "public" | "followers" | "private"

@@ -163,6 +163,26 @@ const collectionSchema = z.object({
   description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
   is_public: z.boolean(),
 });
+const restaurantClaimSchema = z.object({
+  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(160),
+  contact_email: z.string().trim().email("Use a valid contact email.").max(254).optional().or(z.literal("")),
+  website_url: z.string().trim().url("Use a valid website URL.").max(300).optional().or(z.literal("")),
+});
+const restaurantDishSubmissionSchema = z.object({
+  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(160),
+  dish_name: z.string().trim().min(2, "Dish name is required.").max(160),
+  description: z.string().trim().max(500).optional(),
+  cuisine: z.string().trim().max(80).optional(),
+  typical_price: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
+});
+const officialDishPhotoSchema = z.object({
+  image_url: z.string().trim().url("Use a valid photo URL.").max(600),
+  caption: z.string().trim().max(180).optional(),
+});
+const boostRequestSchema = z.object({
+  requested_boost_score: z.coerce.number().min(1).max(25),
+  budget_cents: z.preprocess((value) => value === "" || value === null ? undefined : Math.round(Number(value) * 100), z.number().int().min(0).max(100000000).optional()),
+});
 
 const photoReviewSchema = reviewSchema.extend({
   restaurant_name: z.string().trim().max(120, "Keep restaurant names under 120 characters.").optional(),
@@ -258,6 +278,9 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+type DbError = { message: string };
+type InsertResult = Promise<{ error: DbError | null }>;
+const restaurantParticipationDb = supabase as unknown as { from: (table: "restaurant_claims" | "restaurant_dish_submissions" | "restaurant_official_photos" | "restaurant_boost_requests") => { insert: (values: Record<string, unknown>) => InsertResult } };
 const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
 const convertHeicFile = async (file: File) => {
   if (!isHeicFile(file)) return file;
@@ -826,7 +849,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
           {!sessionUser && <Button className="h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Save dishes you want to try") }><Bookmark />Save for later</Button>}
         </div>
       </div>
-      <div className="max-w-full space-y-4"><div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} /><div className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">Place</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{[item.restaurants?.address, item.restaurants?.city, miles ? `${miles.toFixed(1)} mi` : null].filter(Boolean).join(" · ")}</p><div className="mt-3 grid gap-2"><Button className="w-full rounded-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button><Button className="w-full rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{callUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div></div></div></div>
+      <div className="max-w-full space-y-4"><div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} /><div className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">Place</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{[item.restaurants?.address, item.restaurants?.city, miles ? `${miles.toFixed(1)} mi` : null].filter(Boolean).join(" · ")}</p><div className="mt-3 grid gap-2"><Button className="w-full rounded-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button><Button className="w-full rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{callUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div>{isUuid(item.id) && <RestaurantDishTools item={item} sessionUser={sessionUser} onProtected={onProtected} />}</div></div></div>
     </section>
   );
 };
@@ -981,6 +1004,41 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   }, [item.id, refreshKey]);
   const rows = reviews;
   return <section className="max-w-full space-y-3 overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-3xl font-black">Reviews</h2>{rows.length ? rows.map((review) => <article key={review.id} className="max-w-full overflow-hidden rounded-2xl bg-secondary/55 p-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs font-bold text-muted-foreground sm:grid-cols-2 md:grid-cols-4"><span className="min-w-0 truncate">Temp {review.temperature_rating ?? "—"}/5</span><span className="min-w-0 truncate">Spice {review.spiciness_rating ?? "—"}/5</span><span className="min-w-0 truncate">Sweet {review.sweet_savory_rating ?? "—"}/5</span><span className="min-w-0 truncate">Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div>{review.review && <p className="mt-2 text-sm text-muted-foreground">{review.review}</p>}</article>) : <p className="text-sm font-semibold text-muted-foreground">No reviews yet.</p>}</section>;
+};
+
+const RestaurantDishTools = ({ item, sessionUser, onProtected }: { item: MenuItem; sessionUser: UserSession; onProtected: (message: string) => void }) => {
+  const { toast } = useToast();
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [caption, setCaption] = useState("");
+  const [boostScore, setBoostScore] = useState("8");
+  const [budget, setBudget] = useState("");
+  const [saving, setSaving] = useState<"photo" | "boost" | null>(null);
+
+  const submitPhoto = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to add official photos or request dish boosts.");
+    const parsed = officialDishPhotoSchema.safeParse({ image_url: photoUrl, caption });
+    if (!parsed.success) return toast({ title: "Check the photo", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setSaving("photo");
+    const { error } = await restaurantParticipationDb.from("restaurant_official_photos").insert({ user_id: sessionUser.id, restaurant_id: item.restaurants?.id ?? null, dish_id: item.id, image_url: parsed.data.image_url, caption: parsed.data.caption || null });
+    setSaving(null);
+    if (error) return toast({ title: "Photo not submitted", description: error.message, variant: "destructive" });
+    setPhotoUrl(""); setCaption(""); toast({ title: "Official photo submitted", description: "It will be reviewed before appearing publicly." });
+  };
+
+  const requestBoost = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!sessionUser) return onProtected("Sign in to request a dish boost.");
+    const parsed = boostRequestSchema.safeParse({ requested_boost_score: boostScore, budget_cents: budget });
+    if (!parsed.success) return toast({ title: "Check the boost request", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    setSaving("boost");
+    const { error } = await restaurantParticipationDb.from("restaurant_boost_requests").insert({ user_id: sessionUser.id, restaurant_id: item.restaurants?.id ?? null, dish_id: item.id, requested_boost_score: parsed.data.requested_boost_score, budget_cents: parsed.data.budget_cents ?? null });
+    setSaving(null);
+    if (error) return toast({ title: "Boost not requested", description: error.message, variant: "destructive" });
+    setBudget(""); toast({ title: "Boost request sent", description: "Approved boosts stay capped and labeled for trust." });
+  };
+
+  return <section className="rounded-3xl glass-surface p-4"><p className="soft-chip text-primary"><Megaphone className="size-4" />Restaurant tools</p><h2 className="mt-2 font-display text-2xl font-black">Participate lightly</h2><div className="mt-4 grid gap-3"><form onSubmit={submitPhoto} className="space-y-2 rounded-2xl bg-secondary/60 p-3"><Input className="h-11 rounded-full bg-card" value={photoUrl} onChange={(event) => setPhotoUrl(event.target.value)} placeholder="Official photo URL" /><Input className="h-11 rounded-full bg-card" value={caption} onChange={(event) => setCaption(event.target.value)} maxLength={180} placeholder="Caption optional" /><Button className="h-10 w-full rounded-full" disabled={saving === "photo"}>{saving === "photo" ? <Loader2 className="animate-spin" /> : <CameraIcon />}Submit photo</Button></form><form onSubmit={requestBoost} className="space-y-2 rounded-2xl bg-secondary/60 p-3"><Input className="h-11 rounded-full bg-card" type="number" min="1" max="25" value={boostScore} onChange={(event) => setBoostScore(event.target.value)} placeholder="Boost score 1–25" /><Input className="h-11 rounded-full bg-card" type="number" min="0" step="0.01" value={budget} onChange={(event) => setBudget(event.target.value)} placeholder="Budget optional" /><Button className="h-10 w-full rounded-full" disabled={saving === "boost"}>{saving === "boost" ? <Loader2 className="animate-spin" /> : <Sparkles />}Request boost</Button></form></div></section>;
 };
 
 const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
