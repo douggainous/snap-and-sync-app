@@ -32,6 +32,39 @@ function json(data: unknown, status = 200) {
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "dish";
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+
+async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableApiKey) return { status: "failed", dishName: null, tags: [], confidence: null, error: "Lovable AI is not configured." };
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-pro",
+      messages: [
+        { role: "system", content: "Recognize the primary prepared food dish in the image. Return only tool output. Be conservative: if uncertain, use the user's typed dish as a hint and lower confidence. Tags should describe cuisine, ingredients, dietary style, preparation, flavor, and course." },
+        { role: "user", content: [{ type: "text", text: `Identify this dish. User context: ${JSON.stringify(context)}` }, { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] },
+      ],
+      tools: [{ type: "function", function: { name: "recognize_dish", description: "Return dish recognition suggestions for a food photo.", parameters: { type: "object", properties: { dishName: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 8 }, confidence: { type: "number", minimum: 0, maximum: 1 } }, required: ["dishName", "tags", "confidence"], additionalProperties: false } } }],
+      tool_choice: { type: "function", function: { name: "recognize_dish" } },
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) return { status: "rate_limited", dishName: null, tags: [], confidence: null, error: "AI rate limit reached. Dish was saved without AI suggestions." };
+    if (response.status === 402) return { status: "payment_required", dishName: null, tags: [], confidence: null, error: "AI credits are exhausted. Dish was saved without AI suggestions." };
+    console.error("Lovable AI dish recognition failed", response.status, await response.text());
+    return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI recognition failed. Dish was saved without AI suggestions." };
+  }
+
+  const data = await response.json();
+  const toolArgs = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  if (!toolArgs) return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI returned no dish suggestion." };
+  const parsed = JSON.parse(toolArgs) as { dishName?: string; tags?: string[]; confidence?: number };
+  return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence: typeof parsed.confidence === "number" ? parsed.confidence : null, error: null };
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -109,10 +142,11 @@ serve(async (req) => {
     }
 
     const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
+    const ai = await recognizeDish(input.imageBase64, input.mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
     const { data: photo, error: photoError } = await supabase
       .from("photos")
-      .insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo`, is_public: true })
-      .select("id,dish_id,storage_path,image_url,alt_text,created_at")
+      .insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo`, is_public: true, ai_dish_name: ai.dishName, ai_tags: ai.tags, ai_confidence: ai.confidence, ai_status: ai.status, ai_error: ai.error })
+      .select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error")
       .single();
     if (photoError) {
       console.error("Photo record failed", photoError);
@@ -154,13 +188,14 @@ serve(async (req) => {
       }
     }
 
-    for (const tagName of input.tags) {
+    const allTags = [...new Set([...input.tags, ...ai.tags].map(cleanTag).filter(Boolean))].slice(0, 8);
+    for (const tagName of allTags) {
       const tagSlug = slugify(tagName);
       const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo, rating, review, url: signed.data?.signedUrl ?? null });
+    return json({ dish, photo, rating, review, url: signed.data?.signedUrl ?? null, aiSuggestion: { dishName: ai.dishName, tags: ai.tags, confidence: ai.confidence, status: ai.status, error: ai.error } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);

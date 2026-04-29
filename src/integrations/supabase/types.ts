@@ -615,6 +615,11 @@ export type Database = {
       }
       photos: {
         Row: {
+          ai_confidence: number | null
+          ai_dish_name: string | null
+          ai_error: string | null
+          ai_status: string
+          ai_tags: string[]
           alt_text: string | null
           created_at: string
           dish_id: string
@@ -630,6 +635,11 @@ export type Database = {
           width: number | null
         }
         Insert: {
+          ai_confidence?: number | null
+          ai_dish_name?: string | null
+          ai_error?: string | null
+          ai_status?: string
+          ai_tags?: string[]
           alt_text?: string | null
           created_at?: string
           dish_id: string
@@ -645,6 +655,11 @@ export type Database = {
           width?: number | null
         }
         Update: {
+          ai_confidence?: number | null
+          ai_dish_name?: string | null
+          ai_error?: string | null
+          ai_status?: string
+          ai_tags?: string[]
           alt_text?: string | null
           created_at?: string
           dish_id?: string
