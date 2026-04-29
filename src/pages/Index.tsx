@@ -507,13 +507,14 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
-  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite") => {
+  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => {
     if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
-    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled: true } });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } });
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
-    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish } : row));
-    toast({ title: action === "favorite" ? "Favorited" : "Saved to want to try", description: "Your dish interaction is stored." });
+    const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
+    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
+    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Saved to want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? "Your dish interaction is stored." : "Your dish interaction was removed." });
   };
 
   const startFirstReview = (item: MenuItem) => {
