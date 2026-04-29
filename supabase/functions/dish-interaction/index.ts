@@ -75,7 +75,7 @@ serve(async (req) => {
         .from("ratings")
         .upsert({
           dish_id: input.dishId,
-          user_id: user.id,
+          user_id: user!.id,
           rating: input.rating,
           would_order_again: input.metrics?.wouldOrderAgain ?? null,
           temperature_rating: input.metrics?.temperature ?? null,
@@ -95,7 +95,7 @@ serve(async (req) => {
       if (input.review?.trim() || input.pricePaid != null) {
         const { data: reviewRow, error: reviewError } = await supabase
           .from("reviews")
-          .upsert({ dish_id: input.dishId, user_id: user.id, rating_id: rating.id, body: input.review?.trim() || null, price_paid: input.pricePaid ?? null, currency: "USD", is_public: true }, { onConflict: "rating_id" })
+          .upsert({ dish_id: input.dishId, user_id: user!.id, rating_id: rating.id, body: input.review?.trim() || null, price_paid: input.pricePaid ?? null, currency: "USD", is_public: true }, { onConflict: "rating_id" })
           .select("id,body,price_paid")
           .single();
         if (reviewError) {
@@ -109,7 +109,7 @@ serve(async (req) => {
       for (const tagName of tags) {
         const tagSlug = slugify(tagName);
         const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
-        if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user.id });
+        if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user!.id });
       }
 
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
@@ -117,7 +117,7 @@ serve(async (req) => {
     }
 
     if (input.type === "share") {
-      const { error } = await supabase.from("dish_share_events").insert({ dish_id: input.dishId, user_id: user.id, share_channel: input.channel });
+      const { error } = await supabase.from("dish_share_events").insert({ dish_id: input.dishId, user_id: user?.id ?? null, share_channel: input.channel });
       if (error) {
         console.error("Share event insert failed", error);
         return json({ error: "Could not record share." }, 500);
@@ -129,7 +129,7 @@ serve(async (req) => {
     if (input.enabled) {
       const { error } = await supabase
         .from("saved_items")
-        .upsert({ user_id: user.id, dish_id: input.dishId, action_type: input.action }, { onConflict: "user_id,dish_id,action_type" });
+        .upsert({ user_id: user!.id, dish_id: input.dishId, action_type: input.action }, { onConflict: "user_id,dish_id,action_type" });
       if (error) {
         console.error("Action upsert failed", error);
         return json({ error: "Could not save dish action." }, 500);
@@ -138,7 +138,7 @@ serve(async (req) => {
       const { error } = await supabase
         .from("saved_items")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", user!.id)
         .eq("dish_id", input.dishId)
         .eq("action_type", input.action);
       if (error) {
