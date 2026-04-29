@@ -8,76 +8,76 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 20 22% 7%;
-    --foreground: 38 42% 96%;
+    --background: 36 42% 94%;
+    --foreground: 22 34% 10%;
 
-    --card: 22 18% 11%;
-    --card-foreground: 38 42% 96%;
+    --card: 38 46% 98%;
+    --card-foreground: 22 34% 10%;
 
-    --popover: 22 18% 12%;
-    --popover-foreground: 38 42% 96%;
+    --popover: 38 46% 98%;
+    --popover-foreground: 22 34% 10%;
 
-    --primary: 352 84% 58%;
-    --primary-foreground: 38 42% 98%;
+    --primary: 24 92% 48%;
+    --primary-foreground: 38 50% 98%;
 
-    --secondary: 28 18% 18%;
-    --secondary-foreground: 38 42% 94%;
+    --secondary: 35 44% 88%;
+    --secondary-foreground: 22 34% 12%;
 
-    --muted: 24 12% 20%;
-    --muted-foreground: 35 16% 68%;
+    --muted: 34 30% 84%;
+    --muted-foreground: 24 15% 38%;
 
-    --accent: 42 96% 58%;
-    --accent-foreground: 20 22% 7%;
+    --accent: 43 94% 52%;
+    --accent-foreground: 24 38% 10%;
 
-    --destructive: 4 78% 58%;
-    --destructive-foreground: 38 42% 98%;
+    --destructive: 5 74% 46%;
+    --destructive-foreground: 38 50% 98%;
 
-    --border: 30 12% 24%;
-    --input: 30 12% 24%;
-    --ring: 42 96% 58%;
+    --border: 30 24% 72%;
+    --input: 32 30% 78%;
+    --ring: 24 92% 48%;
 
-    --radius: 0.5rem;
-    --shadow-soft: 0 18px 44px -26px hsl(0 0% 0% / 0.9);
-    --shadow-editorial: 0 32px 90px -34px hsl(352 84% 26% / 0.55);
+    --radius: 1rem;
+    --shadow-soft: 0 18px 42px -28px hsl(23 38% 20% / 0.35);
+    --shadow-editorial: 0 28px 72px -34px hsl(24 92% 32% / 0.45);
 
-    --sidebar-background: 22 18% 11%;
-    --sidebar-foreground: 38 42% 96%;
-    --sidebar-primary: 352 84% 58%;
-    --sidebar-primary-foreground: 38 42% 98%;
-    --sidebar-accent: 28 18% 18%;
-    --sidebar-accent-foreground: 38 42% 94%;
-    --sidebar-border: 30 12% 24%;
-    --sidebar-ring: 42 96% 58%;
+    --sidebar-background: 38 46% 98%;
+    --sidebar-foreground: 22 34% 10%;
+    --sidebar-primary: 24 92% 48%;
+    --sidebar-primary-foreground: 38 50% 98%;
+    --sidebar-accent: 35 44% 88%;
+    --sidebar-accent-foreground: 22 34% 12%;
+    --sidebar-border: 30 24% 72%;
+    --sidebar-ring: 24 92% 48%;
   }
 
   .dark {
-    --background: 18 34% 10%;
-    --foreground: 42 82% 94%;
-    --card: 18 32% 14%;
-    --card-foreground: 42 82% 94%;
-    --popover: 18 32% 14%;
-    --popover-foreground: 42 82% 94%;
-    --primary: 36 96% 54%;
-    --primary-foreground: 18 36% 12%;
-    --secondary: 16 38% 24%;
-    --secondary-foreground: 42 82% 94%;
-    --muted: 18 28% 22%;
-    --muted-foreground: 35 30% 72%;
-    --accent: 8 82% 58%;
-    --accent-foreground: 42 82% 97%;
-    --destructive: 2 75% 54%;
-    --destructive-foreground: 42 82% 97%;
-    --border: 18 24% 28%;
-    --input: 18 24% 28%;
-    --ring: 36 96% 54%;
-    --sidebar-background: 18 32% 14%;
-    --sidebar-foreground: 42 82% 94%;
-    --sidebar-primary: 36 96% 54%;
-    --sidebar-primary-foreground: 18 36% 12%;
-    --sidebar-accent: 16 38% 24%;
-    --sidebar-accent-foreground: 42 82% 94%;
-    --sidebar-border: 18 24% 28%;
-    --sidebar-ring: 36 96% 54%;
+    --background: 28 28% 10%;
+    --foreground: 38 46% 96%;
+    --card: 28 24% 14%;
+    --card-foreground: 38 46% 96%;
+    --popover: 28 24% 14%;
+    --popover-foreground: 38 46% 96%;
+    --primary: 27 94% 54%;
+    --primary-foreground: 28 30% 9%;
+    --secondary: 30 24% 22%;
+    --secondary-foreground: 38 46% 96%;
+    --muted: 28 18% 24%;
+    --muted-foreground: 35 24% 72%;
+    --accent: 43 94% 58%;
+    --accent-foreground: 28 30% 9%;
+    --destructive: 5 74% 54%;
+    --destructive-foreground: 38 46% 96%;
+    --border: 30 18% 30%;
+    --input: 30 18% 30%;
+    --ring: 43 94% 58%;
+    --sidebar-background: 28 24% 14%;
+    --sidebar-foreground: 38 46% 96%;
+    --sidebar-primary: 27 94% 54%;
+    --sidebar-primary-foreground: 28 30% 9%;
+    --sidebar-accent: 30 24% 22%;
+    --sidebar-accent-foreground: 38 46% 96%;
+    --sidebar-border: 30 18% 30%;
+    --sidebar-ring: 43 94% 58%;
   }
 }
 
@@ -99,15 +99,15 @@ All colors MUST be HSL.
 
 @layer components {
   .glass-surface {
-    @apply border border-border/60 bg-card/80 shadow-[var(--shadow-soft)] backdrop-blur-xl;
+    @apply border border-border/50 bg-card/90 shadow-[var(--shadow-soft)] backdrop-blur-xl;
   }
 
   .thumb-action {
-    @apply flex size-12 items-center justify-center rounded-full border border-foreground/15 bg-background/80 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
+    @apply flex size-12 items-center justify-center rounded-full border border-foreground/10 bg-card/90 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
   }
 
   .soft-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-background/75 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
+    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-card/80 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
 
   .feed-scroll {
