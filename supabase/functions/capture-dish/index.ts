@@ -158,44 +158,55 @@ serve(async (req) => {
       avatar_url: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
     });
 
+    const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
+    let firstImageHash: string | null = null;
+    try {
+      firstImageHash = await sha256Hex(Uint8Array.from(atob(images[0].imageBase64), (char) => char.charCodeAt(0)));
+    } catch {
+      firstImageHash = null;
+    }
+
     let restaurantId: string | null = null;
     if (input.restaurantName) {
-      const restaurantSlug = `${slugify(input.restaurantName)}-${crypto.randomUUID().slice(0, 8)}`;
-      const { data: restaurant, error } = await supabase
-        .from("restaurants")
-        .insert({ name: input.restaurantName, slug: restaurantSlug, normalized_name: input.restaurantName.toLowerCase(), created_by: user.id })
-        .select("id,name,slug")
-        .single();
-      if (error) {
-        console.error("Restaurant creation failed", error);
-        return json({ error: "Could not save restaurant." }, 500);
+      const normalizedRestaurant = normalizeName(input.restaurantName);
+      const { data: existingRestaurant } = await supabase.from("restaurants").select("id").eq("normalized_name", normalizedRestaurant).limit(1).maybeSingle();
+      if (existingRestaurant?.id) restaurantId = existingRestaurant.id;
+      else {
+        const restaurantSlug = `${slugify(input.restaurantName)}-${crypto.randomUUID().slice(0, 8)}`;
+        const { data: restaurant, error } = await supabase
+          .from("restaurants")
+          .insert({ name: input.restaurantName, slug: restaurantSlug, normalized_name: normalizedRestaurant, created_by: user.id })
+          .select("id,name,slug")
+          .single();
+        if (error) {
+          console.error("Restaurant creation failed", error);
+          return json({ error: "Could not save restaurant." }, 500);
+        }
+        restaurantId = restaurant.id;
       }
-      restaurantId = restaurant.id;
     }
 
-    const dishSlug = `${slugify(input.dishName)}-${crypto.randomUUID().slice(0, 8)}`;
-    const { data: dish, error: dishError } = await supabase
-      .from("dishes")
-      .insert({
-        restaurant_id: restaurantId,
-        created_by: user.id,
-        name: input.dishName,
-        slug: dishSlug,
-        normalized_name: input.dishName.toLowerCase(),
-        typical_price: input.pricePaid ?? null,
-        currency: "USD",
-        is_published: true,
-      })
-      .select("id,name,slug,restaurant_id,created_at")
-      .single();
-    if (dishError) {
-      console.error("Dish creation failed", dishError);
-      return json({ error: "Could not save dish." }, 500);
+    const dishMatch = input.forceNewDish ? null : await findDishMatch(supabase, { dishName: input.dishName, tags: input.tags, restaurantId, imageHash: firstImageHash });
+    let dish: { id: string; name: string; slug: string; restaurant_id: string | null; created_at?: string | null };
+    if (dishMatch) {
+      const { data: matchedDish, error } = await supabase.from("dishes").select("id,name,slug,restaurant_id,created_at").eq("id", dishMatch.dishId).single();
+      if (error || !matchedDish) return json({ error: "Could not attach to matched dish." }, 500);
+      dish = matchedDish;
+    } else {
+      const dishSlug = `${slugify(input.dishName)}-${crypto.randomUUID().slice(0, 8)}`;
+      const { data: newDish, error: dishError } = await supabase
+        .from("dishes")
+        .insert({ restaurant_id: restaurantId, created_by: user.id, name: input.dishName, slug: dishSlug, normalized_name: normalizeName(input.dishName), typical_price: input.pricePaid ?? null, currency: "USD", is_published: true })
+        .select("id,name,slug,restaurant_id,created_at")
+        .single();
+      if (dishError) {
+        console.error("Dish creation failed", dishError);
+        return json({ error: "Could not save dish." }, 500);
+      }
+      dish = newDish;
     }
 
-    const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
     const photos = [];
-    let firstImageHash: string | null = null;
     for (const [index, image] of images.entries()) {
       const binary = Uint8Array.from(atob(image.imageBase64), (char) => char.charCodeAt(0));
       if (binary.byteLength > 8 * 1024 * 1024) return json({ error: "Each image must be 8MB or smaller." }, 413);
