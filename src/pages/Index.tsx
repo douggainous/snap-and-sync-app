@@ -589,6 +589,11 @@ const Index = () => {
   };
 
   const loadNearbyRestaurants = async (locationPoint: { latitude: number; longitude: number }) => {
+    if (!sessionUser) {
+      setNearbyRestaurants([]);
+      return;
+    }
+
     setLoadingNearby(true);
     let result;
     try {
@@ -603,7 +608,7 @@ const Index = () => {
     setLoadingNearby(false);
     if (error || data?.error) {
       setNearbyRestaurants([]);
-      toast({ title: "Nearby restaurants unavailable", description: "Dish feed still uses saved restaurant locations when available." });
+      toast({ title: "Nearby restaurants unavailable", description: data?.error ?? "Dish feed still uses saved restaurant locations when available." });
       return;
     }
     const restaurants = ((data.restaurants ?? []) as Restaurant[]);
