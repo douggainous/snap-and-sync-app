@@ -109,4 +109,14 @@ All colors MUST be HSL.
   .soft-chip {
     @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-background/75 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
+
+  .feed-scroll {
+    scroll-snap-type: y proximity;
+    scroll-behavior: smooth;
+  }
+
+  .feed-reel {
+    scroll-snap-align: start;
+    scroll-margin-top: 8.5rem;
+  }
 }

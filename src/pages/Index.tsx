@@ -12,6 +12,7 @@ import {
   Compass,
   Footprints,
   Heart,
+  Eye,
   Loader2,
   LocateFixed,
   LogIn,
@@ -269,34 +270,24 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
-  const shareItem = async () => {
-    const url = menuItemUrl(item.slug);
-    if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
-    else await navigator.clipboard.writeText(url);
-  };
 
   return (
-    <article className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/60">
-      <div className="group relative block min-h-[74vh] overflow-hidden bg-secondary sm:min-h-[680px]">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" width={960} height={1280} /> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/18 to-background/5" />
-        <div className="absolute left-4 top-4 soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating}</div>
-        <div className="absolute bottom-0 left-0 right-16 p-4 pb-6 text-foreground sm:p-7">
-          <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/78 px-3 py-1 text-xs font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</span></p>
-          <a href={`/items/${item.slug}`} className="block"><h2 className="font-display text-4xl font-black leading-[0.95] sm:text-6xl">{item.name}</h2></a>
-          {item.description && <p className="mt-2 line-clamp-1 max-w-2xl text-sm font-semibold text-foreground/78 sm:text-base">{item.description}</p>}
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-foreground/80"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span><span>·</span><span>{item.photo_count} photos</span></div>
-        </div>
-        <div className="absolute bottom-5 right-3 flex flex-col gap-3">
-          <button type="button" className={cn("thumb-action", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Favorite dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
-          <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
-          <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); void shareItem(); }} aria-label="Share dish"><Share2 className="size-5" /></button>
-        </div>
+    <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:min-h-[760px] md:rounded-[32px]">
+      {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" width={960} height={1280} /> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-background/28 to-transparent" />
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background/55 to-transparent" />
+      <a href={`/items/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
+      <div className="pointer-events-none absolute left-4 top-4 soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</div>
+      <div className="absolute bottom-0 left-0 right-16 p-4 pb-7 text-foreground sm:p-7">
+        <p className="pointer-events-none mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/62 px-3 py-1 text-[11px] font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
+        <a href={`/items/${item.slug}`} className="relative z-10 block"><h2 className="font-display text-3xl font-black leading-none sm:text-5xl">{item.name}</h2></a>
+        <div className="pointer-events-none mt-2 flex items-center gap-2 text-xs font-bold text-foreground/78"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span></div>
       </div>
-      <div className="flex gap-2 overflow-x-auto px-3 py-3 sm:px-5">
-        {item.review_count > 0 ? <Button size="sm" className="shrink-0 rounded-full" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" className="shrink-0 rounded-full" onClick={() => onFirstReview?.(item)}><Star />Review first</Button>}
-        <Button asChild variant="outline" size="sm" className="shrink-0 rounded-full"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button>
-        {item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0">{tag}</span>)}
+      <div className="absolute bottom-6 right-3 z-10 flex flex-col gap-3">
+        <button type="button" className={cn("thumb-action", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
+        <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
+        <a className="thumb-action" href={`/items/${item.slug}`} aria-label="View dish details"><Eye className="size-5" /></a>
+        {item.review_count === 0 && <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onFirstReview?.(item); }} aria-label="Review first"><Star className="size-5" /></button>}
       </div>
     </article>
   );
@@ -610,24 +601,21 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              <section className="rounded-3xl glass-surface p-4 md:p-5">
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div><p className="soft-chip mb-3 text-accent"><Sparkles className="size-4" />For you</p><h1 className="font-display text-4xl font-black leading-[0.95] md:text-6xl">Eat with your eyes first.</h1></div>
-                  <form onSubmit={submitSearch} className="relative flex min-w-0 flex-1 md:max-w-md"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-12 rounded-full bg-secondary/80 pl-10 pr-4" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cravings" /><Button className="ml-2 h-12 rounded-full px-5"><Search />Search</Button></form>
-                </div>
-                <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-                  <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}><SelectTrigger className="min-w-36 rounded-full bg-secondary/80"><SelectValue placeholder="Rank by" /></SelectTrigger><SelectContent><SelectItem value="relevance">Best match</SelectItem><SelectItem value="trending">Trending</SelectItem><SelectItem value="rating">Top rated</SelectItem><SelectItem value="nearby">Nearest</SelectItem><SelectItem value="recent">Newest</SelectItem></SelectContent></Select>
-                  <Select value={cuisineFilter} onValueChange={setCuisineFilter}><SelectTrigger className="min-w-36 rounded-full bg-secondary/80"><SelectValue placeholder="Cuisine" /></SelectTrigger><SelectContent><SelectItem value="all">All cuisines</SelectItem><SelectItem value="American">American</SelectItem><SelectItem value="Italian">Italian</SelectItem><SelectItem value="Japanese">Japanese</SelectItem><SelectItem value="Mexican">Mexican</SelectItem><SelectItem value="Thai">Thai</SelectItem><SelectItem value="Dessert">Dessert</SelectItem></SelectContent></Select>
-                  <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="min-w-32 rounded-full bg-secondary/80"><SelectValue placeholder="Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any rating</SelectItem><SelectItem value="3.5">3.5★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="4.5">4.5★+</SelectItem></SelectContent></Select>
-                  <Button type="button" className="shrink-0 rounded-full" variant="outline" onClick={askLocation}><LocateFixed />Nearby</Button>
+              <section className="sticky top-[66px] z-20 -mx-3 border-y border-border/40 bg-background/62 px-3 py-2 backdrop-blur-2xl md:top-20 md:mx-0 md:rounded-full md:border md:px-2">
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <form onSubmit={submitSearch} className="relative min-w-[180px] flex-1"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="h-11 rounded-full border-foreground/10 bg-secondary/70 pl-10 pr-4" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /></form>
+                  <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}><SelectTrigger className="h-11 min-w-28 rounded-full bg-secondary/70"><SelectValue placeholder="Rank" /></SelectTrigger><SelectContent><SelectItem value="relevance">Best</SelectItem><SelectItem value="trending">Trending</SelectItem><SelectItem value="rating">Top rated</SelectItem><SelectItem value="nearby">Nearest</SelectItem><SelectItem value="recent">Newest</SelectItem></SelectContent></Select>
+                  <Select value={cuisineFilter} onValueChange={setCuisineFilter}><SelectTrigger className="h-11 min-w-28 rounded-full bg-secondary/70"><SelectValue placeholder="Cuisine" /></SelectTrigger><SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="American">American</SelectItem><SelectItem value="Italian">Italian</SelectItem><SelectItem value="Japanese">Japanese</SelectItem><SelectItem value="Mexican">Mexican</SelectItem><SelectItem value="Thai">Thai</SelectItem><SelectItem value="Dessert">Dessert</SelectItem></SelectContent></Select>
+                  <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="h-11 min-w-24 rounded-full bg-secondary/70"><SelectValue placeholder="Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any ★</SelectItem><SelectItem value="3.5">3.5★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="4.5">4.5★+</SelectItem></SelectContent></Select>
+                  <Button type="button" size="icon" className="h-11 w-11 shrink-0 rounded-full" variant="outline" onClick={askLocation} aria-label="Find nearby dishes"><LocateFixed className="size-5" /></Button>
                 </div>
               </section>
               <div className="grid grid-cols-3 gap-2 rounded-full glass-surface p-1.5">
                 {([{ id: "trending", label: "Hot", icon: Sparkles }, { id: "nearby", label: "Near", icon: MapPin }, { id: "recent", label: "New", icon: Clock }] as const).map((mode) => <Button key={mode.id} variant={feedMode === mode.id ? "default" : "ghost"} className="rounded-full" onClick={() => { if (mode.id === "nearby" && !userLocation) askLocation(); else setFeedMode(mode.id); }}><mode.icon />{mode.label}</Button>)}
               </div>
-              <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
-              <div className="flex items-center justify-between px-1"><h2 className="font-display text-2xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Trending"}</h2>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-5">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
+              {feedMode === "nearby" && <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />}
+              <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Trending"}</h1>{loading && <Loader2 className="animate-spin text-accent" />}</div>
+              {loading ? <SearchResultsLoader /> : <div className="feed-scroll space-y-4">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-muted-foreground">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
             </>
           )}
 
