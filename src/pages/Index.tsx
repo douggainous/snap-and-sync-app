@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 
 const AuthModal = lazy(() => import("@/components/AuthModal"));
 
-type View = "discover" | "scan" | "favorites" | "profile";
+type View = "discover" | "search" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
 type SearchSort = "relevance" | "trending" | "rating" | "nearby" | "recent";
 type UserSession = AppUser | null;
@@ -194,6 +194,7 @@ const DISCOVERY_PAGE_SIZE = 10;
 
 const navItems = [
   { id: "discover" as View, label: "Discover", icon: Compass },
+  { id: "search" as View, label: "Search", icon: Search },
   { id: "scan" as View, label: "Scan", icon: CameraIcon },
   { id: "favorites" as View, label: "Lists", icon: Bookmark },
   { id: "profile" as View, label: "Account", icon: User },
@@ -310,28 +311,32 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
   finally { if (timeoutId) clearTimeout(timeoutId); }
 };
 
-const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const FeedItemCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave?: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
 
   return (
-    <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:w-full md:max-w-full md:min-h-[760px] md:rounded-[32px]">
-        {item.cover_image_url ? <div className="image-skeleton absolute inset-0"><img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 760px, 100vw" width={720} height={960} /></div> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
-      <div className="absolute inset-0 bg-gradient-to-t from-foreground/88 via-foreground/42 to-transparent" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-foreground/62 to-transparent" />
-      <a href={`/dish/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
-      <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
-      <div className="absolute bottom-0 left-0 right-16 p-4 pb-7 text-text-inverse sm:p-7">
-        <p className="pointer-events-none mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-foreground/82 px-3 py-1 text-[11px] font-black backdrop-blur-md"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
-        <a href={`/dish/${item.slug}`} className="relative z-10 block min-w-0"><h2 className="break-words font-display text-3xl font-black leading-none sm:text-5xl">{item.name}</h2></a>
-        <div className="pointer-events-none mt-2 flex items-center gap-2 text-xs font-bold text-text-inverse"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span></div>
-      </div>
-      <div className="absolute bottom-6 right-3 z-10 flex flex-col gap-3">
-        <button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
-        <button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
-        <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-5" /></button>
-        <a className="thumb-action" href={`/dish/${item.slug}`} aria-label="View dish details"><Eye className="size-5" /></a>
-        {item.review_count === 0 && <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onFirstReview?.(item); }} aria-label="Review first"><Star className="size-5" /></button>}
+    <article className="feed-reel group overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.99]">
+      <a href={`/dish/${item.slug}`} className="block" aria-label={`View details for ${item.name}`}>
+        <div className="image-skeleton relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
+          {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 1024px) 760px, 100vw" width={760} height={950} /> : <div className="flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-20 opacity-50" /></div>}
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/88 via-foreground/26 to-transparent" />
+          <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.slice(0, 1).map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
+          <div className="absolute inset-x-0 bottom-0 p-4 text-text-inverse sm:p-5">
+            <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-foreground/82 px-3 py-1 text-[11px] font-black backdrop-blur-md"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
+            <h2 className="break-words font-display text-3xl font-black leading-none sm:text-4xl">{item.name}</h2>
+          </div>
+        </div>
+      </a>
+      <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-secondary"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span>{item.cuisine && <><span>·</span><span>{item.cuisine}</span></>}</div>
+          {item.tags.length > 0 && <div className="mt-2 flex max-w-full gap-2 overflow-hidden">{item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0 px-2.5 py-0.5 text-[11px]">{tag}</span>)}</div>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:w-44">
+          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /><span>Save</span></button>
+          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /><span>Try</span></button>
+        </div>
       </div>
     </article>
   );
