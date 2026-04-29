@@ -574,8 +574,8 @@ const Index = () => {
     const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     if (enabled) {
-      const { data: collection } = await supabase.from("collections").upsert({ user_id: sessionUser.id, name: "Saved", slug: "saved", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
-      if (collection?.id) await supabase.from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "Saved", slug: "saved", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
+      if (collection?.id) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     }
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
