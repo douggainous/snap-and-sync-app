@@ -136,7 +136,7 @@ const listSchema = z.object({
 });
 
 const photoReviewSchema = reviewSchema.extend({
-  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(120, "Keep restaurant names under 120 characters."),
+  restaurant_name: z.string().trim().max(120, "Keep restaurant names under 120 characters.").optional(),
   dish_name: z.string().trim().min(2, "Dish name is required.").max(120, "Keep dish names under 120 characters."),
 });
 
