@@ -469,7 +469,7 @@ const Index = () => {
       return;
     }
 
-    const rows = ((data?.items ?? []) as MenuItem[]);
+    const rows = ((data?.items ?? []) as Array<Partial<MenuItem> & Record<string, unknown>>).map((row) => normalizeMenuItem(row, row.trend_metrics as Record<string, unknown> | null));
     setHasMoreItems(Boolean(data?.hasMore));
     if (append) setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
     else setItems(rows);
@@ -501,19 +501,33 @@ const Index = () => {
 
   useEffect(() => {
     if (!selectedSlug || selectedItem) return;
-    supabase
-      .from("dishes")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
-      .eq("slug", selectedSlug)
-      .eq("is_published", true)
-      .maybeSingle()
-      .then(async ({ data }) => {
-        if (!data) return;
-        const { data: trend } = await (supabase as any).from("dish_trend_metrics").select("trend_score,spike_score,status,is_hot_nearby,recent_share_count,recent_save_count,recent_rating_count").eq("dish_id", data.id).maybeSingle();
-        const trendLabel = trend?.status === "viral" ? "Viral" : trend?.status === "trending" ? "Trending" : null;
-        const item = { ...data, trend_status: trend?.status ?? "normal", trend_labels: [trendLabel, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean), trend_metrics: trend } as unknown as MenuItem;
-        setItems((current) => [item, ...current.filter((currentItem) => currentItem.slug !== selectedSlug)]);
-      });
+    let cancelled = false;
+    setLoading(true);
+    setFeedError(null);
+    withTimeout(
+      supabase
+        .from("dishes")
+        .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
+        .eq("slug", decodeURIComponent(selectedSlug))
+        .eq("is_published", true)
+        .maybeSingle(),
+      8000,
+      "Dish detail",
+    ).then(async ({ data, error }) => {
+      if (cancelled) return;
+      if (error || !data) {
+        setFeedError(error?.message ?? "Dish not found.");
+        setLoading(false);
+        return;
+      }
+      const { data: trend } = await (supabase as any).from("dish_trend_metrics").select("trend_score,spike_score,status,is_hot_nearby,recent_share_count,recent_save_count,recent_rating_count").eq("dish_id", data.id).maybeSingle();
+      if (!cancelled) setItems((current) => [normalizeMenuItem(data as Record<string, unknown>, trend), ...current.filter((currentItem) => currentItem.slug !== data.slug)]);
+    }).catch((error) => {
+      if (!cancelled) setFeedError(error instanceof Error ? error.message : "Could not load this dish.");
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, [selectedItem, selectedSlug]);
 
   const submitSearch = (event: FormEvent) => {
