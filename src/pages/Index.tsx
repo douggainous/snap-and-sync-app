@@ -412,7 +412,17 @@ const Index = () => {
     setLoadingMore(false);
   };
 
-  useEffect(() => { void loadItems(searchParams.get("q") ?? query, false, feedMode, userLocation); }, [searchParams, feedMode]);
+  useEffect(() => {
+    const nextQuery = searchParams.get("q") ?? "";
+    const nextSort = (searchParams.get("sort") as SearchSort) || "relevance";
+    const nextCuisine = searchParams.get("cuisine") ?? "all";
+    const nextRating = searchParams.get("rating") ?? "0";
+    setQuery(nextQuery);
+    setSearchSort(nextSort);
+    setCuisineFilter(nextCuisine);
+    setMinRating(nextRating);
+    void loadItems(nextQuery, false, feedMode, userLocation);
+  }, [searchParams, feedMode]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -438,7 +448,12 @@ const Index = () => {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setSearchPanelOpen(false);
-    navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (searchSort !== "relevance") params.set("sort", searchSort);
+    if (cuisineFilter !== "all") params.set("cuisine", cuisineFilter);
+    if (minRating !== "0") params.set("rating", minRating);
+    navigate(`/search?${params.toString()}`);
     void loadItems(query, false, feedMode, userLocation);
   };
 
