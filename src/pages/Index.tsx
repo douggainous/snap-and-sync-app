@@ -912,7 +912,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
   useEffect(() => {
     if (!sessionUser) return;
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
-  }, [sessionUser, userLocation]);
+  }, [sessionUser]);
 
   const addToList = async (list: FavoriteList) => {
     if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
@@ -1018,7 +1018,7 @@ const ProfilePanel = ({ sessionUser, userLocation, onProtected }: { sessionUser:
       setRecentRated(ratingRows.map((row) => ({ ...dishById.get(row.dish_id), user_rating: Number(row.rating), saved_at: row.updated_at ?? row.created_at } as DashboardDish)).filter((dish) => dish.id));
       setLoading(false);
     });
-  }, [sessionUser]);
+  }, [sessionUser, userLocation]);
 
   const allDishes = useMemo(() => Array.from(new Map([...favorites, ...wantToTry, ...recentRated].map((dish) => [dish.id, dish])).values()), [favorites, wantToTry, recentRated]);
   const topCuisines = useMemo(() => Object.entries(allDishes.reduce<Record<string, number>>((acc, dish) => { const key = dish.cuisine || dish.section || "Discovery"; acc[key] = (acc[key] ?? 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 4), [allDishes]);
