@@ -119,6 +119,7 @@ type FavoriteList = {
   cover_image_url?: string | null;
 };
 type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
+type DishListItemInsert = { list_id: string; dish_id: string };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -840,7 +841,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
   const addToList = async (list: FavoriteList) => {
     if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
-    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id }, { onConflict: "list_id,dish_id" });
+    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
     if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
     else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
   };
@@ -854,7 +855,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
     setLoading(true);
     const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
     const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
-    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id }, { onConflict: "list_id,dish_id" });
+    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
     setLoading(false);
     if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
     toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
