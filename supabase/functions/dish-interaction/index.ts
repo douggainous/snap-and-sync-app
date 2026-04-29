@@ -174,7 +174,7 @@ serve(async (req) => {
       const context = { dishName: dish.name, cuisine: dish.cuisine, restaurantName: restaurant?.name ?? null, rating: input.rating, tags, metrics: input.metrics ?? {} };
       const inputHash = await sha256Hex(JSON.stringify(context));
       const { data: cached } = await supabase.from("review_caption_suggestions").select("id,caption,status,error").eq("user_id", user!.id).eq("dish_id", input.dishId).eq("input_hash", inputHash).maybeSingle();
-      if (cached?.status === "completed" && cached.caption) return json({ suggestion: cached, cached: true });
+      if (cached) return json({ suggestion: cached, cached: true });
 
       const { data: suggestion, error: suggestionError } = await supabase.from("review_caption_suggestions").upsert({ user_id: user!.id, dish_id: input.dishId, input_hash: inputHash, status: "pending", error: null, generated_from: context }, { onConflict: "user_id,dish_id,input_hash" }).select("id,caption,status,error").single();
       if (suggestionError || !suggestion) return json({ error: "Could not prepare caption suggestion." }, 500);
