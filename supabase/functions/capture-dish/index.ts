@@ -226,7 +226,7 @@ serve(async (req) => {
       if (index === 0 && input.forceNewDish && dishMatch) await supabase.from("dish_match_overrides").insert({ user_id: user.id, photo_id: photo.id, original_dish_id: dishMatch.dishId, override_dish_id: dish.id, reason: "User saved as a separate dish during capture." });
     }
 
-    if (!dishMatch) await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
+    if (!shouldUseMatch) await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
 
     let cachedAi: { status: string; dish_name?: string | null; cuisine?: string | null; tags?: string[] | null; ingredients?: string[] | null; confidence?: number | null; confidence_level?: string | null; error?: string | null } | null = null;
     if (firstImageHash && photos[0]) {
