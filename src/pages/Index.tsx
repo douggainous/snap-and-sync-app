@@ -675,7 +675,7 @@ const Index = () => {
           )}
 
           {view === "favorites" && <ShareableLists sessionUser={sessionUser} onProtected={requireAuth} />}
-          {view === "profile" && <ProfilePanel sessionUser={sessionUser} onProtected={requireAuth} />}
+          {view === "profile" && <ProfilePanel sessionUser={sessionUser} userLocation={userLocation} onProtected={requireAuth} />}
         </div>
       </section>
 
@@ -912,7 +912,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
   useEffect(() => {
     if (!sessionUser) return;
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
-  }, [sessionUser]);
+  }, [sessionUser, userLocation]);
 
   const addToList = async (list: FavoriteList) => {
     if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
@@ -983,7 +983,7 @@ const WantToTryPlanner = ({ dishes }: { dishes: WantToTryDish[] }) => {
   return <section className="rounded-[28px] glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">Want to try</h2><span className="soft-chip">{dishes.length}</span></div>{dishes.length ? <div className="space-y-4">{groups.map(([location, items]) => <div key={location} className="rounded-3xl bg-secondary/55 p-3"><div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-display text-xl font-black"><MapPin className="mr-1 inline size-4 text-accent" />{location}</h3><span className="soft-chip text-accent">{items.length}</span></div><div className="grid gap-3 md:grid-cols-2">{items.map((dish) => <a key={dish.id} href={`/items/${dish.slug}`} className="group grid grid-cols-[84px_1fr] gap-3 rounded-2xl bg-background/75 p-2 ring-1 ring-border/45 transition active:scale-[0.98]"><div className="aspect-square overflow-hidden rounded-2xl bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-8 opacity-40" /></div>}</div><div className="min-w-0 py-1"><div className="mb-1 flex gap-1"><span className="soft-chip text-accent"><Star className="size-3 fill-current" />{Number(dish.aggregate_rating ?? 0).toFixed(1)}</span>{dish.distance_miles != null && <span className="soft-chip">{dish.distance_miles.toFixed(1)} mi</span>}</div><p className="line-clamp-2 font-display text-lg font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-muted-foreground">{dish.restaurants?.name || dish.cuisine || "Dish"}</p><p className="mt-2 text-xs font-black text-accent">{dish.plan_group}</p></div></a>)}</div></div>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">Save dishes you are craving next.</p>}</section>;
 };
 
-const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => {
+const ProfilePanel = ({ sessionUser, userLocation, onProtected }: { sessionUser: UserSession; userLocation: { latitude: number; longitude: number } | null; onProtected: (message: string) => void }) => {
   const [loading, setLoading] = useState(false);
   const [favorites, setFavorites] = useState<DashboardDish[]>([]);
   const [wantToTry, setWantToTry] = useState<DashboardDish[]>([]);
@@ -996,7 +996,7 @@ const ProfilePanel = ({ sessionUser, onProtected }: { sessionUser: UserSession; 
     Promise.all([
       supabase.from("saved_items").select("dish_id,action_type,updated_at,created_at").eq("user_id", sessionUser.id).in("action_type", ["favorite", "want_to_try"]).order("updated_at", { ascending: false }).limit(30),
       supabase.from("ratings").select("dish_id,rating,updated_at,created_at").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(18),
-      supabase.functions.invoke("want-to-try", { body: {} }),
+      supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }),
     ]).then(async ([savedResult, ratingsResult, wantToTryResult]) => {
       if (!wantToTryResult.error && !wantToTryResult.data?.error) setWantToTryPlan((wantToTryResult.data?.dishes ?? []) as WantToTryDish[]);
       else setWantToTryPlan([]);
