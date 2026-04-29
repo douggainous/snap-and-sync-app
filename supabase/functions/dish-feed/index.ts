@@ -341,14 +341,14 @@ serve(async (req) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
       const distance = origin ? distanceMiles(origin, restaurant) : null;
       const itemTags = tagsByDishId.get(dish.id) ?? [];
-      const scoreParts = scoreDish(dish, itemTags, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights);
+      const trend = trendByDishId.get(dish.id);
+      const scoreParts = scoreDish(dish, itemTags, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights, trend);
       const score = input.mode === "nearby" && distance != null
         ? scoreParts.score - distance * 2
         : input.mode === "recent"
           ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
           : scoreParts.score;
       const photo = photosByDishId.get(dish.id);
-      const trend = trendByDishId.get(dish.id);
       const trendStatus = trend?.status === "viral" || scoreParts.trendingScore >= 80 ? "viral" : trend?.status === "trending" || scoreParts.trendingScore >= 45 ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && input.mode === "nearby" ? "Hot near you" : null].filter(Boolean);
       return {
