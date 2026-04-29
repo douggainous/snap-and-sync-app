@@ -268,10 +268,26 @@ serve(async (req) => {
 
     const actionsByDishId = new Map<string, Set<string>>();
     const trendByDishId = new Map<string, TrendMetric>();
+    const userSignals: UserSignals = { preferredCuisines: new Set(), savedCuisines: new Map(), cuisineRatings: new Map(), savedDishIds: new Set() };
     if (userId && dishIds.length) {
-      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
+      const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(100);
       if (error) console.error("saved action lookup failed", error);
-      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+      for (const action of (savedActions ?? []) as { dish_id: string; action_type: string; dishes?: { cuisine?: string | null } | null }[]) {
+        if (dishIds.includes(action.dish_id)) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+        userSignals.savedDishIds.add(action.dish_id);
+        const cuisine = action.dishes?.cuisine?.toLowerCase().trim();
+        if (cuisine) userSignals.savedCuisines.set(cuisine, (userSignals.savedCuisines.get(cuisine) ?? 0) + (action.action_type === "favorite" ? 2 : 1));
+      }
+      const { data: profile } = await supabase.from("profiles").select("favorite_cuisines").eq("user_id", userId).maybeSingle();
+      for (const cuisine of ((profile?.favorite_cuisines ?? []) as string[])) userSignals.preferredCuisines.add(cuisine.toLowerCase().trim());
+      const { data: pastRatings, error: pastError } = await supabase.from("ratings").select("rating,dishes(cuisine)").eq("user_id", userId).gte("rating", 4).order("updated_at", { ascending: false }).limit(60);
+      if (pastError) console.error("user preference lookup failed", pastError);
+      for (const row of (pastRatings ?? []) as { rating: number; dishes?: { cuisine?: string | null } | null }[]) {
+        const cuisine = row.dishes?.cuisine?.toLowerCase().trim();
+        if (!cuisine) continue;
+        const current = userSignals.cuisineRatings.get(cuisine) ?? { total: 0, count: 0 };
+        userSignals.cuisineRatings.set(cuisine, { total: current.total + Number(row.rating || 0), count: current.count + 1 });
+      }
     }
 
     if (dishIds.length) {
@@ -288,7 +304,7 @@ serve(async (req) => {
       const restaurantHit = terms && restaurant?.name.toLowerCase().includes(terms) ? 12 : 0;
       const distancePenalty = distance == null ? 0 : Math.min(distance * 2, 80);
       const trend = trendByDishId.get(dish.id);
-      const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) + trendBoost(trend) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) + trendBoost(trend) + preferenceBoost(dish, userSignals) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && origin ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
@@ -302,6 +318,11 @@ serve(async (req) => {
         user_favorite: actionsByDishId.get(dish.id)?.has("favorite") ?? false,
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
+        ranking_signals: {
+          engagement: Number(engagementScore(dish).toFixed(2)),
+          velocity: Number(trendBoost(trend).toFixed(2)),
+          personalization: Number(preferenceBoost(dish, userSignals).toFixed(2)),
+        },
         trend_status: trendStatus,
         trend_labels: trendLabels,
         trend_metrics: trend ?? null,
