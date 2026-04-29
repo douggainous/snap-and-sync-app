@@ -371,22 +371,28 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (term = query, append = false, mode = feedMode, locationPoint = userLocation) => {
+  const loadItems = async (
+    term = query,
+    append = false,
+    mode = feedMode,
+    locationPoint = userLocation,
+    filters = { cuisine: cuisineFilter, rating: minRating, sort: searchSort },
+  ) => {
     const offset = append ? items.length : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
 
     const cleanTerm = sanitizePostgrestSearch(term);
-    const useSearchEndpoint = Boolean(cleanTerm || cuisineFilter !== "all" || minRating !== "0" || searchSort !== "relevance");
-    const sort = searchSort === "relevance" ? (mode === "nearby" ? "nearby" : mode === "recent" ? "recent" : "trending") : searchSort;
+    const useSearchEndpoint = Boolean(cleanTerm || filters.cuisine !== "all" || filters.rating !== "0" || filters.sort !== "relevance");
+    const sort = filters.sort === "relevance" ? (mode === "nearby" ? "nearby" : mode === "recent" ? "recent" : "trending") : filters.sort;
 
     const { data, error } = await supabase.functions.invoke(useSearchEndpoint ? "dish-search" : "dish-feed", {
       body: {
         mode,
         query: cleanTerm,
         sort,
-        cuisine: cuisineFilter === "all" ? null : cuisineFilter,
-        minRating: Number(minRating),
+        cuisine: filters.cuisine === "all" ? null : filters.cuisine,
+        minRating: Number(filters.rating),
         limit: DISCOVERY_PAGE_SIZE,
         offset,
         latitude: locationPoint?.latitude ?? null,
@@ -421,7 +427,7 @@ const Index = () => {
     setSearchSort(nextSort);
     setCuisineFilter(nextCuisine);
     setMinRating(nextRating);
-    void loadItems(nextQuery, false, feedMode, userLocation);
+    void loadItems(nextQuery, false, feedMode, userLocation, { cuisine: nextCuisine, rating: nextRating, sort: nextSort });
   }, [searchParams, feedMode]);
 
   useEffect(() => {
