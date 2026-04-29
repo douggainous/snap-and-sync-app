@@ -832,25 +832,9 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { error } = await supabase.from("menu_item_reviews").insert({
-      menu_item_id: item.id,
-      restaurant_id: item.restaurants?.id ?? null,
-      user_id: sessionUser.id,
-      rating: parsed.data.rating,
-      review: parsed.data.review || null,
-      price_paid: parsed.data.price_paid ?? null,
-      currency: item.currency || "USD",
-      tags: cleanTags,
-      would_order_again: parsed.data.would_order_again,
-      temperature_rating: parsed.data.temperature_rating,
-      spiciness_rating: parsed.data.spiciness_rating,
-      sweet_savory_rating: parsed.data.sweet_savory_rating,
-      flavor_intensity_rating: parsed.data.flavor_intensity_rating,
-      is_public: true,
-    });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "rate", dishId: item.id, rating: parsed.data.rating, review: parsed.data.review || null } });
     setSaving(false);
-    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
+    if (error || data?.error) return toast({ title: "Review not published", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     toast({ title: "Review published", description: "Your item rating is now public for food discovery." });
     setReview("");
     setPricePaid("");
