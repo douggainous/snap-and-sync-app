@@ -162,6 +162,7 @@ serve(async (req) => {
       }
 
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
+      EdgeRuntime.waitUntil(refreshTasteProfile(supabase, user!.id).catch((error) => console.error("taste profile refresh failed", error)));
       return json({ rating, review, dish: updatedDish });
     }
 
@@ -197,6 +198,7 @@ serve(async (req) => {
     }
 
     const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
+    EdgeRuntime.waitUntil(refreshTasteProfile(supabase, user!.id).catch((error) => console.error("taste profile refresh failed", error)));
     return json({ action: input.action, enabled: input.enabled, dish: updatedDish });
   } catch (error) {
     console.error("dish-interaction error", error);
