@@ -100,6 +100,7 @@ type UserSignals = {
 };
 
 type Sponsorship = { dish_id: string; label: string; sponsor_name?: string | null; boost_score: number; target_cuisine?: string | null; target_city?: string | null };
+type DishTagRow = { dish_id: string; category?: string | null; confidence?: number | null; tags?: { name?: string | null } | null };
 
 const intentWords = /\b(best|top|great|popular|trending|near|nearby|me|around|dish|dishes|food|foods|restaurant|restaurants)\b/gi;
 
@@ -177,6 +178,21 @@ function preferenceBoost(dish: DishRow, userSignals: UserSignals) {
   const stated = userSignals.preferredCuisines.has(cuisine) ? 16 : 0;
   const saved = Math.min(14, (userSignals.savedCuisines.get(cuisine) ?? 0) * 4);
   return stated + saved + ratingAffinity + (userSignals.savedDishIds.has(dish.id) ? -8 : 0);
+}
+
+function tagSearchBoost(tags: DishTagRow[], terms: string) {
+  const words = new Set(terms.split(" ").filter((term) => term.length > 1));
+  let score = 0;
+  const names: string[] = [];
+  for (const row of tags) {
+    const name = row.tags?.name?.toLowerCase().trim();
+    if (!name) continue;
+    names.push(name);
+    const confidence = Math.min(1, Math.max(0, Number(row.confidence ?? 0.7)));
+    if (terms && (name.includes(terms) || [...words].some((word) => name.includes(word)))) score += row.category === "cuisine" || row.category === "dish_type" ? 18 * confidence : 10 * confidence;
+    else if (row.category === "cuisine" || row.category === "dish_type") score += 1.2 * confidence;
+  }
+  return { score: Math.min(28, score), names: [...new Set(names)].slice(0, 10) };
 }
 
 function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null, terms = "") {
