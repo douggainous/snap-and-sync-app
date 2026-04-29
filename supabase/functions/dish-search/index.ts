@@ -81,6 +81,13 @@ type TrendMetric = {
   is_hot_nearby: boolean;
 };
 
+type UserSignals = {
+  preferredCuisines: Set<string>;
+  savedCuisines: Map<string, number>;
+  cuisineRatings: Map<string, { total: number; count: number }>;
+  savedDishIds: Set<string>;
+};
+
 const intentWords = /\b(best|top|great|popular|trending|near|nearby|me|around|dish|dishes|food|foods|restaurant|restaurants)\b/gi;
 
 function json(data: unknown, status = 200) {
@@ -110,21 +117,33 @@ function recencyBoost(createdAt: string) {
   return Math.max(0, 30 - ageDays) * 1.5;
 }
 
+function clamp(value: number, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function engagementScore(dish: DishRow) {
-  return Number(dish.aggregate_rating ?? 0) * 20
-    + Number(dish.rating_count ?? 0) * 3
-    + Number(dish.review_count ?? 0) * 4
-    + Number(dish.photo_count ?? 0) * 3
-    + Number(dish.want_to_try_count ?? 0) * 2
-    + Number(dish.favorite_count ?? 0) * 3
-    + Number(dish.save_count ?? 0)
-    + recencyBoost(dish.created_at);
+  const rating = Number(dish.aggregate_rating ?? 0);
+  const ratingCount = Number(dish.rating_count ?? 0);
+  const ratingConfidence = 1 - Math.exp(-ratingCount / 6);
+  const quality = (rating / 5) * 68 * ratingConfidence + Math.min(26, Math.log1p(ratingCount) * 9);
+  const engagement = Math.log1p(Number(dish.favorite_count ?? 0) * 3.4 + Number(dish.want_to_try_count ?? 0) * 2.2 + Number(dish.save_count ?? 0) * 1.5 + Number(dish.review_count ?? 0) * 1.4 + Number(dish.photo_count ?? 0) * 1.1 + ratingCount * 1.8) * 16;
+  return clamp(quality, 0, 100) + clamp(engagement, 0, 100) + recencyBoost(dish.created_at) * 0.45;
 }
 
 function trendBoost(metric?: TrendMetric) {
   if (!metric) return 0;
   const statusBoost = metric.status === "viral" ? 36 : metric.status === "trending" ? 18 : 0;
-  return Number(metric.trend_score ?? 0) * 0.8 + Number(metric.spike_score ?? 0) * 1.2 + statusBoost;
+  return Number(metric.trend_score ?? 0) * 1.05 + Number(metric.spike_score ?? 0) * 1.55 + Number(metric.recent_rating_count ?? 0) * 2 + Number(metric.recent_save_count ?? 0) * 1.6 + Math.max(0, Number(metric.rating_velocity ?? 0)) * 2 + Math.max(0, Number(metric.save_velocity ?? 0)) * 1.7 + statusBoost;
+}
+
+function preferenceBoost(dish: DishRow, userSignals: UserSignals) {
+  const cuisine = dish.cuisine?.toLowerCase().trim() ?? "";
+  if (!cuisine) return userSignals.savedDishIds.has(dish.id) ? -8 : 0;
+  const history = userSignals.cuisineRatings.get(cuisine);
+  const ratingAffinity = history ? ((history.total / history.count) / 5) * 22 + Math.min(10, history.count * 2) : 0;
+  const stated = userSignals.preferredCuisines.has(cuisine) ? 16 : 0;
+  const saved = Math.min(14, (userSignals.savedCuisines.get(cuisine) ?? 0) * 4);
+  return stated + saved + ratingAffinity + (userSignals.savedDishIds.has(dish.id) ? -8 : 0);
 }
 
 serve(async (req) => {
