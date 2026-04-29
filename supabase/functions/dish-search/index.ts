@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+
 const BodySchema = z.object({
   query: z.string().trim().max(120).optional().default(""),
   cuisine: z.string().trim().max(80).optional().nullable(),
@@ -196,7 +198,7 @@ serve(async (req) => {
       const signedPaths = photoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!);
       const signedUrlByPath = new Map<string, string>();
       if (signedPaths.length) {
-        const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, 60 * 60 * 24 * 7);
+        const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, IMAGE_SIGNED_URL_TTL_SECONDS);
         for (const item of signed.data ?? []) if (item.path && item.signedUrl) signedUrlByPath.set(item.path, item.signedUrl);
       }
 
