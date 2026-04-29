@@ -52,7 +52,7 @@ import { cn } from "@/lib/utils";
 
 const AuthModal = lazy(() => import("@/components/AuthModal"));
 
-type View = "discover" | "scan" | "favorites" | "profile";
+type View = "discover" | "search" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
 type SearchSort = "relevance" | "trending" | "rating" | "nearby" | "recent";
 type UserSession = AppUser | null;
@@ -194,6 +194,7 @@ const DISCOVERY_PAGE_SIZE = 10;
 
 const navItems = [
   { id: "discover" as View, label: "Discover", icon: Compass },
+  { id: "search" as View, label: "Search", icon: Search },
   { id: "scan" as View, label: "Scan", icon: CameraIcon },
   { id: "favorites" as View, label: "Lists", icon: Bookmark },
   { id: "profile" as View, label: "Account", icon: User },
@@ -310,28 +311,32 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
   finally { if (timeoutId) clearTimeout(timeoutId); }
 };
 
-const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const FeedItemCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave?: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
 
   return (
-    <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:w-full md:max-w-full md:min-h-[760px] md:rounded-[32px]">
-        {item.cover_image_url ? <div className="image-skeleton absolute inset-0"><img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 760px, 100vw" width={720} height={960} /></div> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
-      <div className="absolute inset-0 bg-gradient-to-t from-foreground/88 via-foreground/42 to-transparent" />
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-foreground/62 to-transparent" />
-      <a href={`/dish/${item.slug}`} className="absolute inset-0" aria-label={`View details for ${item.name}`} />
-      <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
-      <div className="absolute bottom-0 left-0 right-16 p-4 pb-7 text-text-inverse sm:p-7">
-        <p className="pointer-events-none mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-foreground/82 px-3 py-1 text-[11px] font-black backdrop-blur-md"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
-        <a href={`/dish/${item.slug}`} className="relative z-10 block min-w-0"><h2 className="break-words font-display text-3xl font-black leading-none sm:text-5xl">{item.name}</h2></a>
-        <div className="pointer-events-none mt-2 flex items-center gap-2 text-xs font-bold text-text-inverse"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span></div>
-      </div>
-      <div className="absolute bottom-6 right-3 z-10 flex flex-col gap-3">
-        <button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
-        <button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
-        <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-5" /></button>
-        <a className="thumb-action" href={`/dish/${item.slug}`} aria-label="View dish details"><Eye className="size-5" /></a>
-        {item.review_count === 0 && <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onFirstReview?.(item); }} aria-label="Review first"><Star className="size-5" /></button>}
+    <article className="feed-reel group overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.99]">
+      <a href={`/dish/${item.slug}`} className="block" aria-label={`View details for ${item.name}`}>
+        <div className="image-skeleton relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
+          {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 1024px) 760px, 100vw" width={760} height={950} /> : <div className="flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-20 opacity-50" /></div>}
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/88 via-foreground/26 to-transparent" />
+          <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.slice(0, 1).map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
+          <div className="absolute inset-x-0 bottom-0 p-4 text-text-inverse sm:p-5">
+            <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-foreground/82 px-3 py-1 text-[11px] font-black backdrop-blur-md"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
+            <h2 className="break-words font-display text-3xl font-black leading-none sm:text-4xl">{item.name}</h2>
+          </div>
+        </div>
+      </a>
+      <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-secondary"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span>{item.cuisine && <><span>·</span><span>{item.cuisine}</span></>}</div>
+          {item.tags.length > 0 && <div className="mt-2 flex max-w-full gap-2 overflow-hidden">{item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0 px-2.5 py-0.5 text-[11px]">{tag}</span>)}</div>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:w-44">
+          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /><span>Save</span></button>
+          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /><span>Try</span></button>
+        </div>
       </div>
     </article>
   );
@@ -384,6 +389,12 @@ const Index = () => {
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
+
+  useEffect(() => {
+    if (selectedSlug || listSlug) return;
+    if (location.pathname === "/search") setView("search");
+    else if (location.pathname === "/") setView((current) => current === "search" ? "discover" : current);
+  }, [location.pathname, selectedSlug, listSlug]);
 
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
@@ -510,22 +521,25 @@ const Index = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (view !== "discover" || selectedSlug || listSlug) return;
+    if ((view !== "discover" && view !== "search") || selectedSlug || listSlug) return;
     const handle = window.setTimeout(() => {
-      void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
+      if (view === "discover") void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+      else void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
     }, 220);
     return () => window.clearTimeout(handle);
   }, [view, selectedSlug, listSlug, query, feedMode, userLocation, cuisineFilter, minRating, searchSort, loadItems]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
-    if (!node || view !== "discover" || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
+    if (!node || (view !== "discover" && view !== "search") || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) void loadItems(query, true, feedMode, userLocation);
+      if (!entries[0]?.isIntersecting) return;
+      if (view === "discover") void loadItems("", true, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+      else void loadItems(query, true, feedMode, userLocation);
     }, { rootMargin: "700px 0px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation]);
+  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation, loadItems]);
 
   useEffect(() => {
     if (sessionUser || selectedSlug || listSlug || view !== "discover" || guestFeedPromptShownRef.current || items.length < 4) return;
@@ -575,6 +589,7 @@ const Index = () => {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setSearchPanelOpen(false);
+    setView("search");
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
     if (searchSort !== "relevance") params.set("sort", searchSort);
@@ -585,6 +600,7 @@ const Index = () => {
 
   const applySearchSuggestion = (value: string) => {
     setQuery(value);
+    setView("search");
     navigate(`/search?q=${encodeURIComponent(value)}`);
   };
 
@@ -731,7 +747,7 @@ const Index = () => {
 
       <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 pb-3 pt-0 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
         <aside className="hidden lg:block">
-          <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
+          <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
         <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 lg:px-0">
@@ -744,6 +760,13 @@ const Index = () => {
           {listSlug && <PublicListPage slug={listSlug} userLocation={userLocation} onSave={setFavoriteTarget} />}
 
           {view === "discover" && !selectedItem && !listSlug && (
+            <>
+              <div className="flex items-center justify-between px-1 pt-1"><h1 className="font-display text-2xl font-black">Discover</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
+            </>
+          )}
+
+          {view === "search" && !selectedItem && !listSlug && (
             <>
               <section className="relative z-10 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-b border-border/40 bg-background px-3 pb-3 pt-2 backdrop-blur-2xl lg:sticky lg:top-20 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border lg:bg-card/95 lg:py-3">
                 <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-text-secondary" /><Input className="h-14 rounded-full border-foreground/10 bg-secondary/70 pl-12 pr-12 text-lg font-black" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-2 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-card/95 text-text-secondary" aria-label="Use my location"><LocateFixed className="size-5" /></button></form>
@@ -759,8 +782,8 @@ const Index = () => {
                 {([{ id: "trending", label: "Hot", icon: Sparkles }, { id: "nearby", label: "Near", icon: MapPin }, { id: "recent", label: "New", icon: Clock }] as const).map((mode) => <Button key={mode.id} variant={feedMode === mode.id ? "default" : "ghost"} className="rounded-full" onClick={() => { if (mode.id === "nearby" && !userLocation) askLocation(); else setFeedMode(mode.id); }}><mode.icon />{mode.label}</Button>)}
               </div>}
               {feedMode === "nearby" && <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />}
-              <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Trending"}</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
-              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : query ? <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
+              <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Search"}</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Try another search or capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div>}
             </>
           )}
 
@@ -790,9 +813,7 @@ const Index = () => {
       </section>
 
       <nav className="fixed bottom-3 left-3 right-3 z-20 grid min-w-0 grid-cols-5 items-center overflow-hidden rounded-full glass-surface p-1.5 lg:hidden">
-        {navItems.slice(0, 2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-text-secondary", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
-        <button onClick={() => setSearchPanelOpen((open) => !open)} className={cn("mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[var(--shadow-editorial)] transition active:scale-95 sm:size-14", searchPanelOpen && "bg-primary text-primary-foreground")} aria-label="Open search"><Search className="size-6" /></button>
-        {navItems.slice(2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-text-secondary", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
+        {navItems.map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-text-secondary", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
       </nav>
     </main>
   );
