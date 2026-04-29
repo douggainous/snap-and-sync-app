@@ -11,6 +11,8 @@ const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
 const VELOCITY_WINDOW_DAYS = 14;
 const LOW_QUALITY_RATING_FLOOR = 3.2;
 const STALE_DAYS = 180;
+const BOOST_DECAY_DAYS = 14;
+const MAX_BOOST_MODIFIER = 8;
 const DEFAULT_WEIGHTS = {
   quality: 0.34,
   popularity: 0.26,
@@ -76,6 +78,9 @@ type DishRow = {
   favorite_count: number;
   like_count: number;
   trending_score: number;
+  boost_score?: number | null;
+  boost_starts_at?: string | null;
+  boost_ends_at?: string | null;
   created_at: string;
   cover_photo_id?: string | null;
 };
@@ -157,6 +162,21 @@ function ageDays(date?: string | null) {
   return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
 }
 
+function dishBoostModifier(dish: DishRow, qualityScore: number) {
+  const rawBoost = Number(dish.boost_score ?? 0);
+  if (rawBoost <= 0) return 0;
+  const now = Date.now();
+  const startsAt = dish.boost_starts_at ? new Date(dish.boost_starts_at).getTime() : now;
+  const endsAt = dish.boost_ends_at ? new Date(dish.boost_ends_at).getTime() : null;
+  if (startsAt > now || (endsAt && endsAt <= now)) return 0;
+
+  const rating = Number(dish.aggregate_rating ?? 0);
+  const ratingCount = Number(dish.rating_count ?? 0);
+  const trustMultiplier = ratingCount < 3 ? 0.45 : rating < LOW_QUALITY_RATING_FLOOR ? 0.25 : qualityScore >= 62 ? 1 : 0.65;
+  const decayMultiplier = Math.max(0.2, 1 - ageDays(dish.boost_starts_at) / BOOST_DECAY_DAYS);
+  return Math.min(MAX_BOOST_MODIFIER, rawBoost * 0.42 * trustMultiplier * decayMultiplier);
+}
+
 function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null) {
   if (!sponsor) return false;
   const cuisine = (dish.cuisine ?? restaurant?.cuisine ?? "").toLowerCase();
@@ -217,7 +237,7 @@ serve(async (req) => {
 
     let query = supabase
       .from("dishes")
-      .select("id,restaurant_id,name,slug,description,section,cuisine,typical_price,price_min,price_max,currency,aggregate_rating,rating_count,review_count,photo_count,save_count,want_to_try_count,favorite_count,like_count,trending_score,created_at,cover_photo_id")
+        .select("id,restaurant_id,name,slug,description,section,cuisine,typical_price,price_min,price_max,currency,aggregate_rating,rating_count,review_count,photo_count,save_count,want_to_try_count,favorite_count,like_count,trending_score,boost_score,boost_starts_at,boost_ends_at,created_at,cover_photo_id")
       .eq("is_published", true);
 
     const search = input.query.toLowerCase().replace(/[^a-z0-9\s'&/-]/g, " ").replace(/\s+/g, " ").trim();
@@ -357,11 +377,12 @@ serve(async (req) => {
       const isRelevantSponsor = sponsorshipMatches(sponsor, dish, restaurant);
       const recentFromTrend = { ratings: Number(trend?.recent_rating_count ?? 0), wantToTry: Number(trend?.recent_save_count ?? 0), favorites: Number(trend?.recent_favorite_count ?? 0), saves: Number(trend?.recent_save_count ?? 0) };
       const scoreParts = scoreDish(dish, itemTags, recentFromTrend, userSignals, rankingWeights, trend);
+      const nativeBoost = dishBoostModifier(dish, scoreParts.qualityScore);
       const score = input.mode === "nearby" && distance != null
-        ? scoreParts.score - distance * 2 + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0)
+        ? scoreParts.score - distance * 2 + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0)
         : input.mode === "recent"
-          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35 + (isRelevantSponsor ? Math.min(6, Number(sponsor?.boost_score ?? 0)) : 0)
-          : scoreParts.score + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0);
+          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35 + nativeBoost * 0.5 + (isRelevantSponsor ? Math.min(6, Number(sponsor?.boost_score ?? 0)) : 0)
+          : scoreParts.score + nativeBoost + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0);
       const photo = photosByDishId.get(dish.id);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
@@ -380,6 +401,7 @@ serve(async (req) => {
           popularity: Number(scoreParts.popularityScore.toFixed(2)),
           trending: Number(scoreParts.trendingScore.toFixed(2)),
           personalization: Number(scoreParts.personalizationScore.toFixed(2)),
+          boost: Number(nativeBoost.toFixed(2)),
         },
         trend_status: trendStatus,
         trend_labels: isRelevantSponsor ? [sponsor?.label || "Sponsored", ...trendLabels] : trendLabels,

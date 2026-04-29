@@ -357,6 +357,9 @@ export type Database = {
       dishes: {
         Row: {
           aggregate_rating: number
+          boost_ends_at: string | null
+          boost_score: number
+          boost_starts_at: string | null
           cover_photo_id: string | null
           created_at: string
           created_by: string | null
@@ -386,6 +389,9 @@ export type Database = {
         }
         Insert: {
           aggregate_rating?: number
+          boost_ends_at?: string | null
+          boost_score?: number
+          boost_starts_at?: string | null
           cover_photo_id?: string | null
           created_at?: string
           created_by?: string | null
@@ -415,6 +421,9 @@ export type Database = {
         }
         Update: {
           aggregate_rating?: number
+          boost_ends_at?: string | null
+          boost_score?: number
+          boost_starts_at?: string | null
           cover_photo_id?: string | null
           created_at?: string
           created_by?: string | null
