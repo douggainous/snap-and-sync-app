@@ -727,7 +727,7 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (value: numb
     onChange(Math.min(5, Math.max(1, value + delta)));
   };
   return (
-    <div className="flex gap-1" aria-label={`Rating: ${value} out of 5 stars`} onKeyDown={nudgeRating}>
+    <div className="flex touch-pan-x justify-between gap-1" aria-label={`Rating: ${value} out of 5 stars`} onKeyDown={nudgeRating}>
       {[1, 2, 3, 4, 5].map((star) => {
         const fillPercent = value >= star ? 100 : value >= star - 0.5 ? 50 : 0;
         return (
@@ -736,16 +736,16 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (value: numb
             type="button"
             onClick={(event) => chooseRating(star, event)}
             className={cn(
-              "group relative rounded-md p-1 transition duration-200 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              "group relative rounded-2xl p-1.5 transition duration-200 active:scale-125 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               fillPercent ? "text-accent drop-shadow-sm" : "text-muted-foreground/35 hover:text-primary",
             )}
             aria-label={`${star - 0.5} or ${star} stars`}
             aria-pressed={fillPercent > 0}
           >
-            <span className="relative block size-8">
-              <Star className="absolute inset-0 size-8 transition-colors duration-200" />
+            <span className="relative block size-10">
+              <Star className="absolute inset-0 size-10 transition-colors duration-200" />
               <span className="absolute inset-0 overflow-hidden transition-all duration-200 ease-out" style={{ width: `${fillPercent}%` }}>
-                <Star className="size-8 fill-current text-accent transition-transform duration-200 group-hover:scale-110" />
+                <Star className="size-10 fill-current text-accent transition-transform duration-200 group-active:scale-125 group-hover:scale-110" />
               </span>
             </span>
           </button>
