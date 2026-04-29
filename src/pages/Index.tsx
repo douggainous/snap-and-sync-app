@@ -629,6 +629,7 @@ const Index = () => {
   };
 
   const captureReviewPhoto = async () => {
+    const [{ Capacitor }, { Camera, CameraResultType, CameraSource }] = await Promise.all([import("@capacitor/core"), import("@capacitor/camera")]);
     if (!Capacitor.isNativePlatform()) return cameraInputRef.current?.click();
     try {
       const photo = await Camera.getPhoto({ quality: 85, allowEditing: false, resultType: CameraResultType.Uri, source: CameraSource.Camera });
@@ -641,6 +642,7 @@ const Index = () => {
   };
 
   const selectPhotos = async () => {
+    const [{ Capacitor }, { Camera }] = await Promise.all([import("@capacitor/core"), import("@capacitor/camera")]);
     if (!Capacitor.isNativePlatform()) return photoLibraryInputRef.current?.click();
     try {
       const result = await Camera.pickImages({ quality: 85, limit: 6 });
