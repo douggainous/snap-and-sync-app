@@ -193,3 +193,16 @@ All colors MUST be HSL.
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (max-width: 767px) {
+  main,
+  main :where(section, article, div, form, nav, a, button, label) {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  main :where([class*="overflow-x-auto"], [class*="snap-x"]) {
+    overflow-x: hidden;
+    overscroll-behavior-x: contain;
+  }
+}
