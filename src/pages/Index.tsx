@@ -931,6 +931,7 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
   const [wouldOrderAgain, setWouldOrderAgain] = useState(true);
   const [wantToTry, setWantToTry] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [forceNewDish, setForceNewDish] = useState(false);
   const [temperature, setTemperature] = useState(3);
   const [spiciness, setSpiciness] = useState(0);
   const [sweetSavory, setSweetSavory] = useState(3);
@@ -948,11 +949,12 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     const optimizedFiles = await Promise.all(imageFiles.slice(0, 6).map((file) => optimizeImageFile(file)));
     const images = await Promise.all(optimizedFiles.map(async (file) => ({ imageBase64: await fileToBase64(file), mimeType: file.type, fileName: file.name })));
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { data, error } = await withTimeout(supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } }), 18000, "Dish capture").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Dish capture timed out." }, error: null }));
+    const { data, error } = await withTimeout(supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, forceNewDish, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } }), 18000, "Dish capture").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Dish capture timed out." }, error: null }));
     setSaving(false);
     if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const aiSuggestion = data?.aiSuggestion;
-    toast({ title: aiSuggestion?.status === "completed" && aiSuggestion?.dishName ? `AI suggests: ${aiSuggestion.dishName}` : "Dish saved", description: aiSuggestion?.status === "completed" ? `Confidence: ${aiSuggestion.confidenceLevel ?? "medium"} · Tags: ${(aiSuggestion.tags ?? []).join(", ") || "none"}` : aiSuggestion?.error ?? "AI recognition is queued; your dish is already saved." });
+    const matchDescription = data?.dishMatch?.status === "matched" ? `Linked to ${data.dishMatch.dishName} · ${(data.dishMatch.reasons ?? []).join(", ")}` : "Saved as a new dish.";
+    toast({ title: aiSuggestion?.status === "completed" && aiSuggestion?.dishName ? `AI suggests: ${aiSuggestion.dishName}` : "Dish saved", description: aiSuggestion?.status === "completed" ? `${matchDescription} Confidence: ${aiSuggestion.confidenceLevel ?? "medium"}` : aiSuggestion?.error ?? `${matchDescription} AI recognition is queued.` });
     setReview(""); setPricePaid(""); setTags(""); onPublished();
   };
 
