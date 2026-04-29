@@ -343,6 +343,7 @@ const Index = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const feedRequestRef = useRef(0);
   const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -413,13 +414,14 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (
+  const loadItems = useCallback(async (
     term = query,
     append = false,
     mode = feedMode,
     locationPoint = userLocation,
     filters = { cuisine: cuisineFilter, rating: minRating, sort: searchSort },
   ) => {
+    const requestId = ++feedRequestRef.current;
     const offset = append ? items.length : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
@@ -446,6 +448,7 @@ const Index = () => {
         },
       }), 12000, "Feed request");
     } catch (error) {
+      if (requestId !== feedRequestRef.current) return;
       const message = error instanceof Error ? error.message : "The feed took too long to respond.";
       setFeedError(message);
       toast({ title: "Feed unavailable", description: message, variant: "destructive" });
@@ -457,6 +460,7 @@ const Index = () => {
     }
 
     const { data, error } = result;
+    if (requestId !== feedRequestRef.current) return;
     if (error || data?.error) {
       setFeedError(data?.error ?? error?.message ?? "Try again.");
       toast({ title: "Feed unavailable", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
@@ -473,7 +477,7 @@ const Index = () => {
     else setItems(rows);
     setLoading(false);
     setLoadingMore(false);
-  };
+  }, [cuisineFilter, feedMode, items.length, minRating, query, searchSort, toast, userLocation]);
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") ?? "";
