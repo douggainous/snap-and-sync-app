@@ -99,6 +99,8 @@ type UserSignals = {
   savedCuisines: Map<string, number>;
   affinityTags: Map<string, number>;
   savedDishIds: Set<string>;
+  profileCuisines: Map<string, number>;
+  profileTags: Map<string, number>;
 };
 
 type TrendMetric = {
@@ -221,8 +223,10 @@ function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, 
   const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 36 : 0;
   const savedCuisineAffinity = cuisine ? Math.min(32, (userSignals.savedCuisines.get(cuisine) ?? 0) * 8) : 0;
   const tagAffinity = Math.min(34, dishTags.reduce((sum, tag) => sum + (userSignals.affinityTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 5);
+  const profileCuisineAffinity = cuisine ? Math.min(28, (userSignals.profileCuisines.get(cuisine) ?? 0) * 3.5) : 0;
+  const profileTagAffinity = Math.min(30, dishTags.reduce((sum, tag) => sum + (userSignals.profileTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 2.8);
   const alreadySavedPenalty = userSignals.savedDishIds.has(dish.id) ? -10 : 0;
-  const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + alreadySavedPenalty);
+  const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + profileCuisineAffinity + profileTagAffinity + alreadySavedPenalty);
   const score = qualityScore * weights.quality + popularityScore * weights.popularity + trendingScore * weights.trending + personalizationScore * weights.personalization;
   return { score, qualityScore, popularityScore, trendingScore, personalizationScore };
 }
