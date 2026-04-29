@@ -142,10 +142,11 @@ serve(async (req) => {
     }
 
     const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
+    const ai = await recognizeDish(input.imageBase64, input.mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
     const { data: photo, error: photoError } = await supabase
       .from("photos")
-      .insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo`, is_public: true })
-      .select("id,dish_id,storage_path,image_url,alt_text,created_at")
+      .insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo`, is_public: true, ai_dish_name: ai.dishName, ai_tags: ai.tags, ai_confidence: ai.confidence, ai_status: ai.status, ai_error: ai.error })
+      .select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error")
       .single();
     if (photoError) {
       console.error("Photo record failed", photoError);
@@ -187,13 +188,14 @@ serve(async (req) => {
       }
     }
 
-    for (const tagName of input.tags) {
+    const allTags = [...new Set([...input.tags, ...ai.tags].map(cleanTag).filter(Boolean))].slice(0, 8);
+    for (const tagName of allTags) {
       const tagSlug = slugify(tagName);
       const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo, rating, review, url: signed.data?.signedUrl ?? null });
+    return json({ dish, photo, rating, review, url: signed.data?.signedUrl ?? null, aiSuggestion: { dishName: ai.dishName, tags: ai.tags, confidence: ai.confidence, status: ai.status, error: ai.error } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);
