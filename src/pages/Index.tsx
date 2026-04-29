@@ -31,10 +31,6 @@ import {
   X,
 } from "lucide-react";
 import ramenImage from "@/assets/ramen-table.jpg";
-import demoPlatedNoodles from "@/assets/demo-plated-noodles.jpg";
-import demoCrispyTacos from "@/assets/demo-crispy-tacos.jpg";
-import demoBistroPlate from "@/assets/demo-bistro-plate.jpg";
-import demoDessertGelato from "@/assets/demo-dessert-gelato.jpg";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +50,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 type View = "discover" | "scan" | "favorites" | "profile";
+type FeedMode = "trending" | "nearby" | "recent";
 type UserSession = AppUser | null;
 type Restaurant = {
   id?: string;
@@ -146,75 +143,6 @@ const photoReviewSchema = reviewSchema.extend({
 const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const DISCOVERY_PAGE_SIZE = 10;
 
-const demoImages = [ramenImage, demoPlatedNoodles, demoCrispyTacos, demoBistroPlate, demoDessertGelato];
-
-const demoDishes = [
-  ["Pork Belly Bao Taco", "Luna Kitchen", "Austin", "Asian fusion", "Crispy pork belly tucked into a soft bao-style shell with pickled cucumber, scallion, and chili crunch.", "Small plates", 12, 4.8, 186, 42, ["pork belly", "bao", "taco", "crispy", "spicy"], ["contains gluten"], ramenImage],
-  ["Baja Fish Tacos", "Naranja Social", "Austin", "Mexican", "Beer-battered cod, shaved cabbage, lime crema, and habanero salsa on handmade corn tortillas.", "Tacos", 15, 4.7, 243, 67, ["fish tacos", "crispy", "lime", "value"], ["pescatarian"], null],
-  ["Crispy Duck Garlic Noodles", "Kitsune Counter", "Austin", "Japanese", "Wok-tossed noodles with confit duck, black garlic, bok choy, and toasted sesame.", "Noodles", 22, 4.6, 98, 21, ["duck", "noodles", "garlic", "umami"], ["contains gluten"], null],
-  ["Hot Honey Chicken Biscuit", "June's Counter", "East Austin", "Southern", "Buttermilk fried chicken, whipped pepper butter, hot honey, and a flaky black-pepper biscuit.", "Brunch", 14, 4.9, 312, 88, ["fried chicken", "hot honey", "brunch", "crispy"], ["contains gluten"], null],
-  ["Charred Corn Elote Bowl", "Masa Verde", "Austin", "Mexican", "Fire-roasted corn, cotija, crema, lime, chile de árbol, cilantro, and crunchy tostada shards.", "Bowls", 11, 4.5, 74, 18, ["corn", "elote", "vegetarian", "lime"], ["vegetarian"], null],
-  ["Truffle Smash Burger", "Cedar & Coil", "South Congress", "American", "Double smashed patties, truffle aioli, aged cheddar, grilled onions, and pickled mustard seed.", "Burgers", 18, 4.7, 205, 53, ["burger", "truffle", "cheddar", "late night"], ["contains gluten"], null],
-  ["Saffron Lamb Dumplings", "Silk Road House", "Austin", "Central Asian", "Hand-folded lamb dumplings with saffron yogurt, chili oil, mint, and crispy shallots.", "Dumplings", 16, 4.8, 121, 34, ["lamb", "dumplings", "chili oil", "savory"], ["contains gluten"], null],
-  ["Coconut Curry Mussels", "Harbor Finch", "Rainey Street", "Seafood", "Steamed mussels in coconut lemongrass curry with basil, lime, and grilled sourdough.", "Seafood", 19, 4.4, 63, 16, ["mussels", "curry", "coconut", "shareable"], ["pescatarian"], null],
-  ["Miso Caramel Bread Pudding", "Paper Lantern", "Austin", "Japanese bakery", "Custardy milk bread, miso caramel, sesame crumble, and vanilla cream.", "Dessert", 10, 4.9, 89, 27, ["dessert", "miso caramel", "sweet", "bakery"], ["vegetarian"], null],
-  ["Green Chile Birria Ramen", "Caldera Noodle Bar", "Austin", "Mexican Japanese", "Beef birria broth, springy noodles, green chile tare, onion, cilantro, and consommé on the side.", "Ramen", 17, 4.6, 158, 44, ["birria", "ramen", "brothy", "spicy"], ["contains gluten"], null],
-  ["Smoked Beet Reuben", "Garden Gram", "Hyde Park", "Vegetarian", "Smoked beets, kraut, Swiss, rye, and tangy comeback sauce pressed until crisp.", "Sandwiches", 13, 4.3, 0, 9, ["vegetarian", "reuben", "smoked", "sandwich"], ["vegetarian", "contains gluten"], null],
-  ["Tamarind Glazed Ribs", "Ember Yard", "Austin", "Thai BBQ", "Sticky pork ribs glazed with tamarind, fish sauce caramel, toasted rice, and herbs.", "BBQ", 24, 4.8, 177, 51, ["ribs", "tamarind", "bbq", "sticky"], [], null],
-  ["Whipped Feta & Chili Crisp Pita", "Fig & Stone", "Austin", "Mediterranean", "Cloudy feta, lemon oil, chili crisp, herbs, and warm blistered pita.", "Mezze", 12, 4.5, 91, 24, ["feta", "pita", "chili crisp", "shareable"], ["vegetarian", "contains gluten"], null],
-  ["Black Garlic Steak Frites", "Rue Alder", "Downtown Austin", "French", "Seared hanger steak, black garlic butter, crisp fries, and peppery watercress.", "Mains", 29, 4.6, 140, 33, ["steak", "fries", "black garlic", "date night"], [], null],
-  ["Achiote Shrimp Tostada", "Mar Brava", "Austin", "Coastal Mexican", "Crunchy tostada with achiote shrimp, avocado, pickled onion, crema, and lime.", "Tostadas", 14, 4.7, 118, 39, ["shrimp", "tostada", "avocado", "fresh"], ["pescatarian"], null],
-  ["Cacio e Pepe Arancini", "Little Juniper", "Austin", "Italian", "Risotto fritters packed with pecorino, black pepper, and molten mozzarella.", "Antipasti", 11, 4.4, 0, 12, ["arancini", "cheese", "crispy", "italian"], ["vegetarian"], null],
-  ["Maple Gochujang Wings", "Birdcall Social", "Austin", "Korean American", "Double-fried wings lacquered in maple gochujang with sesame, scallion, and ranch dust.", "Wings", 15, 4.8, 264, 72, ["wings", "gochujang", "sweet heat", "crispy"], [], null],
-  ["Roasted Mushroom Laksa", "Lime Leaf Room", "Austin", "Malaysian", "Coconut curry noodle soup with roasted mushrooms, tofu puffs, herbs, and sambal.", "Soup", 16, 4.5, 77, 20, ["laksa", "mushroom", "coconut", "noodles"], ["vegetarian", "contains gluten"], null],
-  ["Cardamom French Toast", "Morning Ritual", "Austin", "Brunch", "Thick-cut challah, cardamom custard, berry compote, pistachio, and maple cream.", "Breakfast", 14, 4.6, 132, 41, ["french toast", "cardamom", "brunch", "sweet"], ["vegetarian", "contains gluten"], null],
-  ["Crispy Rice Tuna Bites", "Koji Room", "Austin", "Sushi", "Golden crispy rice topped with spicy tuna, avocado, jalapeño, and eel sauce.", "Sushi bar", 18, 4.7, 219, 58, ["tuna", "crispy rice", "sushi", "spicy"], ["pescatarian"], null],
-  ["Harissa Carrot Shawarma", "Olive Radio", "Austin", "Middle Eastern", "Roasted carrots, harissa, tahini, pickles, herbs, and fluffy laffa.", "Wraps", 12, 4.2, 0, 8, ["carrot", "shawarma", "harissa", "veggie"], ["vegetarian", "contains gluten"], null],
-  ["Short Rib Quesabirria", "Taco Fuego", "East Austin", "Mexican", "Crisped tortillas stuffed with short rib, Oaxaca cheese, onion, cilantro, and consommé.", "Tacos", 16, 4.9, 386, 96, ["quesabirria", "short rib", "cheesy", "consommé"], [], null],
-  ["Lobster Kimchi Fried Rice", "Seoul Harbor", "Austin", "Korean seafood", "Wok-seared rice with lobster, ripe kimchi, egg, scallion, and toasted nori.", "Rice", 26, 4.6, 104, 29, ["lobster", "kimchi", "fried rice", "seafood"], ["pescatarian"], null],
-  ["Pistachio Rose Gelato", "Dolce Neon", "Austin", "Gelato", "Dense pistachio gelato with rose syrup, toasted pistachios, and sea salt.", "Dessert", 8, 4.4, 52, 17, ["gelato", "pistachio", "rose", "dessert"], ["vegetarian"], null],
-  ["Nashville Hot Cauliflower", "Violet Diner", "Austin", "New American", "Crispy cauliflower tossed in hot oil spice with pickles and cooling herb ranch.", "Snacks", 11, 4.1, 0, 6, ["cauliflower", "nashville hot", "vegetarian", "spicy"], ["vegetarian"], null],
-  ["Sesame Scallion Pancake Wrap", "Lucky Wok Window", "Austin", "Chinese", "Flaky scallion pancake wrapped around roast chicken, cucumber, herbs, and hoisin chile sauce.", "Street food", 13, 4.5, 95, 25, ["scallion pancake", "wrap", "hoisin", "street food"], ["contains gluten"], null],
-  ["Blue Corn Chilaquiles", "Comal & Sun", "Austin", "Mexican brunch", "Blue corn chips simmered in salsa verde with crema, cotija, egg, and avocado.", "Brunch", 15, 4.6, 149, 37, ["chilaquiles", "brunch", "salsa verde", "avocado"], ["vegetarian"], null],
-  ["Brown Butter Scallops", "Lenoir Lane", "Austin", "Modern American", "Seared scallops, brown butter, lemon, capers, cauliflower purée, and crisp herbs.", "Seafood", 31, 4.7, 83, 19, ["scallops", "brown butter", "seafood", "date night"], ["pescatarian"], null],
-] as const;
-
-const sampleItems: MenuItem[] = demoDishes.map(([name, restaurantName, city, cuisine, description, section, price, rating, reviewCount, photoCount, tags, dietaryTags, image], index) => ({
-  id: `demo-${index + 1}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
-  name,
-  slug: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-at-${restaurantName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
-  description,
-  section,
-  cuisine,
-  tags: [...tags],
-  dietary_tags: [...dietaryTags],
-  typical_price: price,
-  price_min: Math.max(6, price - 1),
-  price_max: price + 2,
-  currency: "USD",
-  aggregate_rating: rating,
-  review_count: reviewCount,
-  photo_count: photoCount,
-  cover_image_url: image ?? demoImages[index % demoImages.length],
-  restaurants: {
-    name: restaurantName,
-    address: `${100 + index * 17} ${["Market", "Cedar", "Lamar", "Congress", "Garden", "Willow"][index % 6]} St`,
-    city,
-    cuisine,
-    latitude: 30.2672 + ((index % 7) - 3) * 0.012,
-    longitude: -97.7431 + ((index % 9) - 4) * 0.014,
-    rating,
-    review_count: reviewCount,
-    price_level: price >= 26 ? 3 : price >= 16 ? 2 : 1,
-    maps_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurantName} ${city}`)}`,
-  },
-}));
-
-const sampleReviews = [
-  { author: "Maya", rating: 5, text: "The shell eats like a bao but carries the crunch of a taco. The pork belly is the reason to go." },
-  { author: "Leo", rating: 4.5, text: "Great heat, rich fat, and still balanced. Order two if you are hungry." },
-];
-
 const navItems = [
   { id: "discover" as View, label: "Discover", icon: Compass },
   { id: "scan" as View, label: "Scan", icon: CameraIcon },
@@ -224,13 +152,6 @@ const navItems = [
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
-const filterDemoItems = (term: string) => {
-  const search = term.trim().toLowerCase();
-  if (!search) return sampleItems;
-  const filtered = sampleItems.filter((item) => `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.cuisine ?? ""} ${item.restaurants?.name ?? ""} ${item.restaurants?.city ?? ""}`.toLowerCase().includes(search));
-  return filtered.length ? filtered : sampleItems;
-};
-const demoPage = (term: string, offset: number) => filterDemoItems(term).slice(offset, offset + DISCOVERY_PAGE_SIZE);
 const sanitizePostgrestSearch = (value: string) => value
   .trim()
   .toLowerCase()
@@ -383,10 +304,11 @@ const Index = () => {
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
-  const [items, setItems] = useState<MenuItem[]>(sampleItems);
+  const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [feedMode, setFeedMode] = useState<FeedMode>("trending");
   const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -400,7 +322,7 @@ const Index = () => {
 
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
-  const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
+  const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
 
   useEffect(() => {
     const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
@@ -444,50 +366,56 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (term = query, append = false) => {
+  const loadItems = async (term = query, append = false, mode = feedMode, locationPoint = userLocation) => {
     const offset = append ? items.length : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    const search = sanitizePostgrestSearch(term);
-    const { data, error } = await supabase
-      .from("menu_items")
-      .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
-      .eq("is_published", true)
-      .or(search ? `normalized_name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%` : "name.not.is.null")
-      .order("aggregate_rating", { ascending: false })
-      .order("review_count", { ascending: false })
-      .range(offset, offset + DISCOVERY_PAGE_SIZE - 1);
+    const { data, error } = await supabase.functions.invoke("dish-feed", {
+      body: {
+        mode,
+        query: sanitizePostgrestSearch(term),
+        limit: DISCOVERY_PAGE_SIZE,
+        offset,
+        latitude: locationPoint?.latitude ?? null,
+        longitude: locationPoint?.longitude ?? null,
+        radiusMiles: 50,
+      },
+    });
 
-    const realRows = !error && data?.length ? data as unknown as MenuItem[] : [];
-    const rows = realRows.length ? realRows : demoPage(term, offset);
-    const demoTotal = filterDemoItems(term).length;
-    setHasMoreItems(realRows.length ? rows.length === DISCOVERY_PAGE_SIZE : offset + rows.length < demoTotal);
-    if (append) {
-      setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
-    } else {
-      setItems(rows.length ? rows : sampleItems.slice(0, DISCOVERY_PAGE_SIZE));
+    if (error || data?.error) {
+      toast({ title: "Feed unavailable", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
+      if (!append) setItems([]);
+      setHasMoreItems(false);
+      setLoading(false);
+      setLoadingMore(false);
+      return;
     }
+
+    const rows = ((data?.items ?? []) as MenuItem[]);
+    setHasMoreItems(Boolean(data?.hasMore));
+    if (append) setItems((current) => [...current, ...rows.filter((row) => !current.some((item) => item.id === row.id))]);
+    else setItems(rows);
     setLoading(false);
     setLoadingMore(false);
   };
 
-  useEffect(() => { loadItems(searchParams.get("q") ?? query); }, [searchParams]);
+  useEffect(() => { void loadItems(searchParams.get("q") ?? query, false, feedMode, userLocation); }, [searchParams, feedMode]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
     if (!node || view !== "discover" || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) void loadItems(query, true);
+      if (entries[0]?.isIntersecting) void loadItems(query, true, feedMode, userLocation);
     }, { rootMargin: "700px 0px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length]);
+  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation]);
 
   useEffect(() => {
     if (!selectedSlug || selectedItem) return;
     supabase
-      .from("menu_items")
+      .from("dishes")
       .select("*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference)")
       .eq("slug", selectedSlug)
       .eq("is_published", true)
@@ -499,7 +427,7 @@ const Index = () => {
     event.preventDefault();
     setSearchPanelOpen(false);
     navigate(`/search?q=${encodeURIComponent(query.trim())}`);
-    void loadItems(query);
+    void loadItems(query, false, feedMode, userLocation);
   };
 
   const loadNearbyRestaurants = async (locationPoint: { latitude: number; longitude: number }) => {
@@ -507,19 +435,21 @@ const Index = () => {
     const { data, error } = await supabase.functions.invoke("nearby-restaurants", { body: { ...locationPoint, radiusMiles: 50, query } });
     setLoadingNearby(false);
     if (error || data?.error) {
-      setNearbyRestaurants(sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
-      toast({ title: "Demo nearby picks loaded", description: "Using simulated restaurants while Google Maps is unavailable." });
+      setNearbyRestaurants([]);
+      toast({ title: "Nearby restaurants unavailable", description: "Dish feed still uses saved restaurant locations when available." });
       return;
     }
     const restaurants = ((data.restaurants ?? []) as Restaurant[]);
-    setNearbyRestaurants(restaurants.length ? restaurants : sampleItems.map((item) => item.restaurants).filter(Boolean) as Restaurant[]);
-    toast({ title: restaurants.length ? "Nearby restaurants loaded" : "Demo nearby picks loaded", description: restaurants.length ? `Found ${restaurants.length} restaurants within 50 miles.` : "Using simulated restaurants for the feed." });
+    setNearbyRestaurants(restaurants);
+    toast({ title: restaurants.length ? "Nearby restaurants loaded" : "No nearby restaurants yet", description: restaurants.length ? `Found ${restaurants.length} restaurants within 50 miles.` : "Create dishes with restaurants to populate nearby places." });
   };
 
   const askLocation = () => navigator.geolocation?.getCurrentPosition(
     (pos) => {
       const locationPoint = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
       setUserLocation(locationPoint);
+      setFeedMode("nearby");
+      void loadItems(query, false, "nearby", locationPoint);
       void loadNearbyRestaurants(locationPoint);
     },
     () => toast({ title: "Location unavailable", description: "You can still browse by city and restaurant.", variant: "destructive" }),
@@ -601,12 +531,7 @@ const Index = () => {
     setScanDish("");
   };
 
-  const displayedItems = useMemo(() => {
-    const term = query.toLowerCase();
-    return items.filter((item) => !term || `${item.name} ${item.description ?? ""} ${item.tags.join(" ")} ${item.restaurants?.name ?? ""}`.toLowerCase().includes(term));
-  }, [items, query]);
-
-  const heroItem = selectedItem ?? displayedItems[0] ?? sampleItems[0];
+  const displayedItems = items;
 
   return (
     <main className="min-h-screen bg-background pb-24 text-foreground md:pb-0">
@@ -643,13 +568,16 @@ const Index = () => {
                   <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2 md:max-w-md"><Input className="h-12 bg-background" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cravings…" /><Button className="h-12"><Search />Search</Button></form>
                 </div>
               </section>
+              <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card p-2 shadow-[var(--shadow-soft)]">
+                {([{ id: "trending", label: "Trending", icon: Sparkles }, { id: "nearby", label: "Nearby", icon: MapPin }, { id: "recent", label: "Recent", icon: Clock }] as const).map((mode) => <Button key={mode.id} variant={feedMode === mode.id ? "default" : "ghost"} onClick={() => { if (mode.id === "nearby" && !userLocation) askLocation(); else setFeedMode(mode.id); }}><mode.icon />{mode.label}</Button>)}
+              </div>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
-              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
+              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">{feedMode === "nearby" ? "Nearby dishes" : feedMode === "recent" ? "Recently added" : "Trending dishes"}</h2><p className="text-sm text-muted-foreground">Backend-ranked with ratings, saves, recency, and engagement from real dish data.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-lg border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No real dishes yet</h2><p className="text-sm text-muted-foreground">Capture a dish photo to create the first feed item.</p><Button className="mt-4" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
-          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="rounded-lg border bg-card p-4 shadow-[var(--shadow-soft)]">
@@ -849,9 +777,9 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   const [reviews, setReviews] = useState<MenuItemReview[]>([]);
   useEffect(() => {
     if (!isUuid(item.id)) { setReviews([]); return; }
-    supabase.from("menu_item_reviews").select("id,rating,review,price_paid,currency,tags,would_order_again,temperature_rating,spiciness_rating,sweet_savory_rating,flavor_intensity_rating,created_at").eq("menu_item_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []) as MenuItemReview[]));
+    supabase.from("reviews").select("id,body,price_paid,currency,created_at,ratings(rating,would_order_again,temperature_rating,spiciness_rating,sweet_savory_rating,flavor_intensity_rating)").eq("dish_id", item.id).eq("is_public", true).order("created_at", { ascending: false }).limit(20).then(({ data }) => setReviews((data ?? []).map((row: any) => ({ id: row.id, rating: row.ratings?.rating ?? 0, review: row.body, price_paid: row.price_paid, currency: row.currency, tags: [], would_order_again: row.ratings?.would_order_again, temperature_rating: row.ratings?.temperature_rating, spiciness_rating: row.ratings?.spiciness_rating, sweet_savory_rating: row.ratings?.sweet_savory_rating, flavor_intensity_rating: row.ratings?.flavor_intensity_rating, created_at: row.created_at })) as MenuItemReview[]));
   }, [item.id, refreshKey]);
-  const rows = reviews.length ? reviews : sampleReviews.map((review, index) => ({ id: `sample-${index}`, rating: review.rating, review: review.text, currency: "USD", tags: [], would_order_again: true }));
+  const rows = reviews;
   return <section className="space-y-3 rounded-lg border bg-card p-4"><h2 className="font-display text-3xl font-black">Reviews for this menu item</h2>{rows.map((review) => <article key={review.id} className="border-t pt-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid grid-cols-2 gap-2 text-xs font-bold text-muted-foreground md:grid-cols-4"><span>Temp {review.temperature_rating ?? "—"}/5</span><span>Spice {review.spiciness_rating ?? "—"}/5</span><span>Sweet↔Savory {review.sweet_savory_rating ?? "—"}/5</span><span>Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div><p className="mt-2 text-sm text-muted-foreground">{review.review}</p>{review.tags.length ? <div className="mt-2 flex flex-wrap gap-2">{review.tags.map((tag) => <span key={tag} className="rounded-full border bg-background px-2 py-1 text-xs font-bold">{tag}</span>)}</div> : null}</article>)}</section>;
 };
 
