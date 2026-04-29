@@ -11,9 +11,9 @@ const BodySchema = z.object({
   dishName: z.string().trim().min(2).max(120),
   restaurantName: z.string().trim().max(120).optional().nullable(),
   imageBase64: z.string().min(100).max(12_000_000).optional(),
-  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]).optional(),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]).optional(),
   fileName: z.string().trim().max(160).optional(),
-  images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
+  images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
   rating: z.number().min(1).max(5).optional(),
   review: z.string().trim().max(1200).optional().nullable(),
   pricePaid: z.number().min(0).max(10000).optional().nullable(),
@@ -34,7 +34,7 @@ function json(data: unknown, status = 200) {
 }
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "dish";
-const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
+const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 
 async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
