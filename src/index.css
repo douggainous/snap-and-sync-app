@@ -51,33 +51,33 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 18 34% 10%;
-    --foreground: 42 82% 94%;
-    --card: 18 32% 14%;
-    --card-foreground: 42 82% 94%;
-    --popover: 18 32% 14%;
-    --popover-foreground: 42 82% 94%;
-    --primary: 36 96% 54%;
-    --primary-foreground: 18 36% 12%;
-    --secondary: 16 38% 24%;
-    --secondary-foreground: 42 82% 94%;
-    --muted: 18 28% 22%;
-    --muted-foreground: 35 30% 72%;
-    --accent: 8 82% 58%;
-    --accent-foreground: 42 82% 97%;
-    --destructive: 2 75% 54%;
-    --destructive-foreground: 42 82% 97%;
-    --border: 18 24% 28%;
-    --input: 18 24% 28%;
-    --ring: 36 96% 54%;
-    --sidebar-background: 18 32% 14%;
-    --sidebar-foreground: 42 82% 94%;
-    --sidebar-primary: 36 96% 54%;
-    --sidebar-primary-foreground: 18 36% 12%;
-    --sidebar-accent: 16 38% 24%;
-    --sidebar-accent-foreground: 42 82% 94%;
-    --sidebar-border: 18 24% 28%;
-    --sidebar-ring: 36 96% 54%;
+    --background: 28 28% 10%;
+    --foreground: 38 46% 96%;
+    --card: 28 24% 14%;
+    --card-foreground: 38 46% 96%;
+    --popover: 28 24% 14%;
+    --popover-foreground: 38 46% 96%;
+    --primary: 27 94% 54%;
+    --primary-foreground: 28 30% 9%;
+    --secondary: 30 24% 22%;
+    --secondary-foreground: 38 46% 96%;
+    --muted: 28 18% 24%;
+    --muted-foreground: 35 24% 72%;
+    --accent: 43 94% 58%;
+    --accent-foreground: 28 30% 9%;
+    --destructive: 5 74% 54%;
+    --destructive-foreground: 38 46% 96%;
+    --border: 30 18% 30%;
+    --input: 30 18% 30%;
+    --ring: 43 94% 58%;
+    --sidebar-background: 28 24% 14%;
+    --sidebar-foreground: 38 46% 96%;
+    --sidebar-primary: 27 94% 54%;
+    --sidebar-primary-foreground: 28 30% 9%;
+    --sidebar-accent: 30 24% 22%;
+    --sidebar-accent-foreground: 38 46% 96%;
+    --sidebar-border: 30 18% 30%;
+    --sidebar-ring: 43 94% 58%;
   }
 }
 
@@ -99,15 +99,15 @@ All colors MUST be HSL.
 
 @layer components {
   .glass-surface {
-    @apply border border-border/60 bg-card/80 shadow-[var(--shadow-soft)] backdrop-blur-xl;
+    @apply border border-border/55 bg-card/86 shadow-[var(--shadow-soft)] backdrop-blur-xl;
   }
 
   .thumb-action {
-    @apply flex size-12 items-center justify-center rounded-full border border-foreground/15 bg-background/80 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
+    @apply flex size-12 items-center justify-center rounded-full border border-foreground/10 bg-card/88 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
   }
 
   .soft-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-background/75 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
+    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-card/82 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
 
   .feed-scroll {
