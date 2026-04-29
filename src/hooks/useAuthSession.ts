@@ -18,12 +18,13 @@ const userFromAuth = (user: User): AppUser => ({
 
 const ensureUserRecord = async (user: User) => {
   const appUser = userFromAuth(user);
-  await supabase.from("users").upsert({
+  const { error } = await supabase.from("users").upsert({
     id: appUser.id,
     email: appUser.email ?? null,
     display_name: appUser.displayName ?? null,
     avatar_url: appUser.avatarUrl ?? null,
   });
+  if (error) console.warn("Profile sync failed", error.message);
 };
 
 export const useAuthSession = () => {
@@ -38,17 +39,23 @@ export const useAuthSession = () => {
       }
 
       setUser(userFromAuth(authUser));
-      await ensureUserRecord(authUser);
+      await ensureUserRecord(authUser).catch((error) => console.warn("Profile sync failed", error));
     };
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       void syncSession(session?.user ?? null);
     });
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      await syncSession(data.session?.user ?? null);
-      setIsAuthReady(true);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data, error }) => {
+        if (error) console.warn("Session restore failed", error.message);
+        await syncSession(data.session?.user ?? null);
+      })
+      .catch((error) => {
+        console.warn("Session restore failed", error);
+        setUser(null);
+      })
+      .finally(() => setIsAuthReady(true));
 
     return () => subscription.subscription.unsubscribe();
   }, []);
