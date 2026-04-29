@@ -99,15 +99,15 @@ All colors MUST be HSL.
 
 @layer components {
   .glass-surface {
-    @apply border border-border/55 bg-card/86 shadow-[var(--shadow-soft)] backdrop-blur-xl;
+    @apply border border-border/50 bg-card/90 shadow-[var(--shadow-soft)] backdrop-blur-xl;
   }
 
   .thumb-action {
-    @apply flex size-12 items-center justify-center rounded-full border border-foreground/10 bg-card/88 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
+    @apply flex size-12 items-center justify-center rounded-full border border-foreground/10 bg-card/90 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
   }
 
   .soft-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-card/82 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
+    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-card/80 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
 
   .feed-scroll {
