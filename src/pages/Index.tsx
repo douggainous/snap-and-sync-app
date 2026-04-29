@@ -619,7 +619,7 @@ const Index = () => {
             </>
           )}
 
-          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
             <section className="-mx-3 space-y-3 md:mx-0">
@@ -678,7 +678,7 @@ const AccountMenu = ({ sessionUser, onSelectView, onSignOut }: { sessionUser: No
   );
 };
 
-const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
+const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const callUrl = phoneHref(item.restaurants?.phone);
   const webUrl = websiteHref(item.restaurants?.website_url);
@@ -688,6 +688,8 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onRe
     if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
     else await navigator.clipboard.writeText(url);
   };
+  const isTrending = item.aggregate_rating >= 4.5 || (item.review_count ?? 0) >= 10 || (item.favorite_count ?? 0) >= 10;
+  const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   return (
     <section className="space-y-4">
       <div className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/60">
