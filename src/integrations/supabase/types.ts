@@ -66,6 +66,7 @@ export type Database = {
           cuisine: string | null
           currency: string
           description: string | null
+          favorite_count: number
           id: string
           is_published: boolean
           like_count: number
@@ -94,6 +95,7 @@ export type Database = {
           cuisine?: string | null
           currency?: string
           description?: string | null
+          favorite_count?: number
           id?: string
           is_published?: boolean
           like_count?: number
@@ -122,6 +124,7 @@ export type Database = {
           cuisine?: string | null
           currency?: string
           description?: string | null
+          favorite_count?: number
           id?: string
           is_published?: boolean
           like_count?: number
@@ -1159,7 +1162,7 @@ export type Database = {
     }
     Enums: {
       post_visibility: "public" | "followers" | "private"
-      saved_item_type: "saved" | "want_to_try" | "tried" | "liked"
+      saved_item_type: "saved" | "want_to_try" | "tried" | "liked" | "favorite"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1288,7 +1291,7 @@ export const Constants = {
   public: {
     Enums: {
       post_visibility: ["public", "followers", "private"],
-      saved_item_type: ["saved", "want_to_try", "tried", "liked"],
+      saved_item_type: ["saved", "want_to_try", "tried", "liked", "favorite"],
     },
   },
 } as const
