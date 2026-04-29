@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils";
 
 type View = "discover" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
+type SearchSort = "relevance" | "trending" | "rating" | "nearby" | "recent";
 type UserSession = AppUser | null;
 type Restaurant = {
   id?: string;
@@ -151,6 +153,7 @@ const navItems = [
 ];
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const sanitizePostgrestSearch = (value: string) => value
   .trim()
@@ -309,6 +312,9 @@ const Index = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [feedMode, setFeedMode] = useState<FeedMode>("trending");
+  const [searchSort, setSearchSort] = useState<SearchSort>(parseSearchSort(searchParams.get("sort")));
+  const [cuisineFilter, setCuisineFilter] = useState(searchParams.get("cuisine") ?? "all");
+  const [minRating, setMinRating] = useState(searchParams.get("rating") ?? "0");
   const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -366,15 +372,28 @@ const Index = () => {
     document.head.appendChild(ld);
   }, [location.pathname, location.search, query, selectedItem]);
 
-  const loadItems = async (term = query, append = false, mode = feedMode, locationPoint = userLocation) => {
+  const loadItems = async (
+    term = query,
+    append = false,
+    mode = feedMode,
+    locationPoint = userLocation,
+    filters = { cuisine: cuisineFilter, rating: minRating, sort: searchSort },
+  ) => {
     const offset = append ? items.length : 0;
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    const { data, error } = await supabase.functions.invoke("dish-feed", {
+    const cleanTerm = sanitizePostgrestSearch(term);
+    const useSearchEndpoint = Boolean(cleanTerm || filters.cuisine !== "all" || filters.rating !== "0" || filters.sort !== "relevance");
+    const sort = filters.sort === "relevance" ? (mode === "nearby" ? "nearby" : mode === "recent" ? "recent" : "trending") : filters.sort;
+
+    const { data, error } = await supabase.functions.invoke(useSearchEndpoint ? "dish-search" : "dish-feed", {
       body: {
         mode,
-        query: sanitizePostgrestSearch(term),
+        query: cleanTerm,
+        sort,
+        cuisine: filters.cuisine === "all" ? null : filters.cuisine,
+        minRating: Number(filters.rating),
         limit: DISCOVERY_PAGE_SIZE,
         offset,
         latitude: locationPoint?.latitude ?? null,
@@ -400,7 +419,17 @@ const Index = () => {
     setLoadingMore(false);
   };
 
-  useEffect(() => { void loadItems(searchParams.get("q") ?? query, false, feedMode, userLocation); }, [searchParams, feedMode]);
+  useEffect(() => {
+    const nextQuery = searchParams.get("q") ?? "";
+    const nextSort = parseSearchSort(searchParams.get("sort"));
+    const nextCuisine = searchParams.get("cuisine") ?? "all";
+    const nextRating = searchParams.get("rating") ?? "0";
+    setQuery(nextQuery);
+    setSearchSort(nextSort);
+    setCuisineFilter(nextCuisine);
+    setMinRating(nextRating);
+    void loadItems(nextQuery, false, feedMode, userLocation, { cuisine: nextCuisine, rating: nextRating, sort: nextSort });
+  }, [searchParams, feedMode]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
@@ -426,7 +455,12 @@ const Index = () => {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
     setSearchPanelOpen(false);
-    navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (searchSort !== "relevance") params.set("sort", searchSort);
+    if (cuisineFilter !== "all") params.set("cuisine", cuisineFilter);
+    if (minRating !== "0") params.set("rating", minRating);
+    navigate(`/search?${params.toString()}`);
     void loadItems(query, false, feedMode, userLocation);
   };
 
@@ -567,12 +601,18 @@ const Index = () => {
                   <div><h1 className="font-display text-4xl font-black leading-none md:text-6xl">Scroll until something looks good.</h1><p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">Large food photos, clear ratings, and quick actions for dishes near you.</p></div>
                   <form onSubmit={submitSearch} className="flex min-w-0 flex-1 gap-2 md:max-w-md"><Input className="h-12 bg-background" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search cravings…" /><Button className="h-12"><Search />Search</Button></form>
                 </div>
+                <div className="mt-4 grid gap-2 md:grid-cols-4">
+                  <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}><SelectTrigger className="bg-background"><SelectValue placeholder="Rank by" /></SelectTrigger><SelectContent><SelectItem value="relevance">Best match</SelectItem><SelectItem value="trending">Trending</SelectItem><SelectItem value="rating">Top rated</SelectItem><SelectItem value="nearby">Nearest</SelectItem><SelectItem value="recent">Newest</SelectItem></SelectContent></Select>
+                  <Select value={cuisineFilter} onValueChange={setCuisineFilter}><SelectTrigger className="bg-background"><SelectValue placeholder="Cuisine" /></SelectTrigger><SelectContent><SelectItem value="all">All cuisines</SelectItem><SelectItem value="American">American</SelectItem><SelectItem value="Italian">Italian</SelectItem><SelectItem value="Japanese">Japanese</SelectItem><SelectItem value="Mexican">Mexican</SelectItem><SelectItem value="Thai">Thai</SelectItem><SelectItem value="Dessert">Dessert</SelectItem></SelectContent></Select>
+                  <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="bg-background"><SelectValue placeholder="Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any rating</SelectItem><SelectItem value="3.5">3.5★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="4.5">4.5★+</SelectItem></SelectContent></Select>
+                  <Button type="button" variant="outline" onClick={askLocation}><LocateFixed />Location</Button>
+                </div>
               </section>
               <div className="grid grid-cols-3 gap-2 rounded-lg border bg-card p-2 shadow-[var(--shadow-soft)]">
                 {([{ id: "trending", label: "Trending", icon: Sparkles }, { id: "nearby", label: "Nearby", icon: MapPin }, { id: "recent", label: "Recent", icon: Clock }] as const).map((mode) => <Button key={mode.id} variant={feedMode === mode.id ? "default" : "ghost"} onClick={() => { if (mode.id === "nearby" && !userLocation) askLocation(); else setFeedMode(mode.id); }}><mode.icon />{mode.label}</Button>)}
               </div>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
-              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">{feedMode === "nearby" ? "Nearby dishes" : feedMode === "recent" ? "Recently added" : "Trending dishes"}</h2><p className="text-sm text-muted-foreground">Backend-ranked with ratings, saves, recency, and engagement from real dish data.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
+              <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">{query ? `Dish search: ${query}` : feedMode === "nearby" ? "Nearby dishes" : feedMode === "recent" ? "Recently added" : "Trending dishes"}</h2><p className="text-sm text-muted-foreground">Backend-ranked with full-text dish search, ratings, saves, location, recency, and engagement.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
               {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />) : <div className="rounded-lg border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">No real dishes yet</h2><p className="text-sm text-muted-foreground">Capture a dish photo to create the first feed item.</p><Button className="mt-4" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
