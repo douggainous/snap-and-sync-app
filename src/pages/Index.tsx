@@ -153,7 +153,7 @@ const navItems = [
 ];
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const isSearchSort = (value: string | null): value is SearchSort => Boolean(value && ["relevance", "trending", "rating", "nearby", "recent"].includes(value));
+const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
 const sanitizePostgrestSearch = (value: string) => value
   .trim()
@@ -312,7 +312,7 @@ const Index = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [feedMode, setFeedMode] = useState<FeedMode>("trending");
-  const [searchSort, setSearchSort] = useState<SearchSort>(isSearchSort(searchParams.get("sort")) ? searchParams.get("sort") : "relevance");
+  const [searchSort, setSearchSort] = useState<SearchSort>(parseSearchSort(searchParams.get("sort")));
   const [cuisineFilter, setCuisineFilter] = useState(searchParams.get("cuisine") ?? "all");
   const [minRating, setMinRating] = useState(searchParams.get("rating") ?? "0");
   const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
@@ -421,7 +421,7 @@ const Index = () => {
 
   useEffect(() => {
     const nextQuery = searchParams.get("q") ?? "";
-    const nextSort = isSearchSort(searchParams.get("sort")) ? searchParams.get("sort") : "relevance";
+    const nextSort = parseSearchSort(searchParams.get("sort"));
     const nextCuisine = searchParams.get("cuisine") ?? "all";
     const nextRating = searchParams.get("rating") ?? "0";
     setQuery(nextQuery);
