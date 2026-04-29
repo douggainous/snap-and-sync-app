@@ -84,15 +84,36 @@ All colors MUST be HSL.
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    overflow-x: hidden;
   }
 
   html {
     scroll-behavior: smooth;
+  }
+
+  #root {
+    overflow-x: clip;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
   }
 
   .font-display {
@@ -107,11 +128,11 @@ All colors MUST be HSL.
   }
 
   .thumb-action {
-    @apply flex size-12 items-center justify-center rounded-full border border-foreground/10 bg-card/90 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition duration-150 ease-out active:scale-90;
+    @apply flex size-12 shrink-0 items-center justify-center rounded-full border border-foreground/10 bg-card/90 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition duration-150 ease-out active:scale-90;
   }
 
   .soft-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-card/80 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
+    @apply inline-flex max-w-full items-center gap-1 rounded-full border border-foreground/10 bg-card/80 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
 
   .feed-scroll {
