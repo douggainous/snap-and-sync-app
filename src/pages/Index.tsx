@@ -128,6 +128,16 @@ type FavoriteList = {
 };
 type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
 type DishListItemInsert = { list_id: string; dish_id: string };
+type Collection = {
+  id: string;
+  name: string;
+  description?: string | null;
+  slug: string;
+  is_public: boolean;
+  cover_image_url?: string | null;
+  item_count?: number;
+};
+type CollectionPreview = Collection & { dishes: DashboardDish[] };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -142,6 +152,11 @@ const reviewSchema = z.object({
 });
 const listSchema = z.object({
   title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
+  description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
+  is_public: z.boolean(),
+});
+const collectionSchema = z.object({
+  name: z.string().trim().min(1, "Collection name is required.").max(80, "Keep collection names under 80 characters."),
   description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
   is_public: z.boolean(),
 });
