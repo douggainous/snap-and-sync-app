@@ -67,6 +67,20 @@ type DishRow = {
   cover_photo_id?: string | null;
 };
 
+type TrendMetric = {
+  dish_id: string;
+  recent_save_count: number;
+  recent_rating_count: number;
+  recent_share_count: number;
+  save_velocity: number;
+  rating_velocity: number;
+  share_velocity: number;
+  spike_score: number;
+  trend_score: number;
+  status: string;
+  is_hot_nearby: boolean;
+};
+
 const intentWords = /\b(best|top|great|popular|trending|near|nearby|me|around|dish|dishes|food|foods|restaurant|restaurants)\b/gi;
 
 function json(data: unknown, status = 200) {
@@ -105,6 +119,12 @@ function engagementScore(dish: DishRow) {
     + Number(dish.favorite_count ?? 0) * 3
     + Number(dish.save_count ?? 0)
     + recencyBoost(dish.created_at);
+}
+
+function trendBoost(metric?: TrendMetric) {
+  if (!metric) return 0;
+  const statusBoost = metric.status === "viral" ? 36 : metric.status === "trending" ? 18 : 0;
+  return Number(metric.trend_score ?? 0) * 0.8 + Number(metric.spike_score ?? 0) * 1.2 + statusBoost;
 }
 
 serve(async (req) => {
@@ -228,10 +248,17 @@ serve(async (req) => {
     }
 
     const actionsByDishId = new Map<string, Set<string>>();
+    const trendByDishId = new Map<string, TrendMetric>();
     if (userId && dishIds.length) {
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
       if (error) console.error("saved action lookup failed", error);
       for (const action of (savedActions ?? []) as { dish_id: string; action_type: string }[]) actionsByDishId.set(action.dish_id, new Set([...(actionsByDishId.get(action.dish_id) ?? []), action.action_type]));
+    }
+
+    if (dishIds.length) {
+      const { data: trends, error } = await supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_rating_count,recent_share_count,save_velocity,rating_velocity,share_velocity,spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds);
+      if (error) console.error("trend metric lookup failed", error);
+      for (const trend of (trends ?? []) as TrendMetric[]) trendByDishId.set(trend.dish_id, trend);
     }
 
     let ranked = dishes.map((dish) => {
@@ -241,7 +268,10 @@ serve(async (req) => {
       const cuisineHit = terms && dish.cuisine?.toLowerCase().includes(terms) ? 15 : 0;
       const restaurantHit = terms && restaurant?.name.toLowerCase().includes(terms) ? 12 : 0;
       const distancePenalty = distance == null ? 0 : Math.min(distance * 2, 80);
-      const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const trend = trendByDishId.get(dish.id);
+      const score = nameHit + cuisineHit + restaurantHit + engagementScore(dish) + trendBoost(trend) - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
+      const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && origin ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
       return {
         ...dish,
@@ -253,6 +283,9 @@ serve(async (req) => {
         user_favorite: actionsByDishId.get(dish.id)?.has("favorite") ?? false,
         distance_miles: distance,
         feed_score: Number(score.toFixed(2)),
+        trend_status: trendStatus,
+        trend_labels: trendLabels,
+        trend_metrics: trend ?? null,
       };
     });
 

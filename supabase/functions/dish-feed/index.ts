@@ -93,6 +93,20 @@ type UserSignals = {
   cuisineRatings: Map<string, { total: number; count: number }>;
 };
 
+type TrendMetric = {
+  dish_id: string;
+  recent_save_count: number;
+  recent_rating_count: number;
+  recent_share_count: number;
+  save_velocity: number;
+  rating_velocity: number;
+  share_velocity: number;
+  spike_score: number;
+  trend_score: number;
+  status: string;
+  is_hot_nearby: boolean;
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -251,6 +265,7 @@ serve(async (req) => {
 
     const actionsByDishId = new Map<string, Set<string>>();
     const recentByDishId = new Map<string, RecentEngagement>();
+    const trendByDishId = new Map<string, TrendMetric>();
     const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map() };
     if (userId && dishIds.length) {
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type").eq("user_id", userId).in("dish_id", dishIds).in("action_type", ["want_to_try", "favorite"]);
@@ -272,12 +287,15 @@ serve(async (req) => {
 
     if (dishIds.length) {
       const since = new Date(Date.now() - VELOCITY_WINDOW_DAYS * 86_400_000).toISOString();
-      const [recentRatingsResult, recentSavesResult] = await Promise.all([
+      const [recentRatingsResult, recentSavesResult, trendResult] = await Promise.all([
         supabase.from("ratings").select("dish_id,created_at").in("dish_id", dishIds).gte("created_at", since),
         supabase.from("saved_items").select("dish_id,action_type,created_at").in("dish_id", dishIds).gte("created_at", since),
+        supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_rating_count,recent_share_count,save_velocity,rating_velocity,share_velocity,spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds),
       ]);
       if (recentRatingsResult.error) console.error("recent rating velocity lookup failed", recentRatingsResult.error);
       if (recentSavesResult.error) console.error("recent save velocity lookup failed", recentSavesResult.error);
+      if (trendResult.error) console.error("trend metric lookup failed", trendResult.error);
+      for (const row of (trendResult.data ?? []) as TrendMetric[]) trendByDishId.set(row.dish_id, row);
       for (const row of (recentRatingsResult.data ?? []) as { dish_id: string; created_at: string }[]) {
         const current = recentByDishId.get(row.dish_id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 };
         current.ratings += 1;
@@ -305,6 +323,9 @@ serve(async (req) => {
           ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
           : scoreParts.score;
       const photo = photosByDishId.get(dish.id);
+      const trend = trendByDishId.get(dish.id);
+      const trendStatus = trend?.status === "viral" || scoreParts.trendingScore >= 80 ? "viral" : trend?.status === "trending" || scoreParts.trendingScore >= 45 ? "trending" : "normal";
+      const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && input.mode === "nearby" ? "Hot near you" : null].filter(Boolean);
       return {
         ...dish,
         tags: tagsByDishId.get(dish.id) ?? [],
@@ -321,6 +342,9 @@ serve(async (req) => {
           trending: Number(scoreParts.trendingScore.toFixed(2)),
           personalization: Number(scoreParts.personalizationScore.toFixed(2)),
         },
+        trend_status: trendStatus,
+        trend_labels: trendLabels,
+        trend_metrics: trend ?? null,
       };
     });
 

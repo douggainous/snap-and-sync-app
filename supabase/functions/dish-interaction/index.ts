@@ -24,6 +24,7 @@ const BodySchema = z.discriminatedUnion("type", [
     }).optional(),
   }),
   z.object({ type: z.literal("toggle_action"), dishId: z.string().uuid(), action: z.enum(["want_to_try", "favorite"]), enabled: z.boolean() }),
+  z.object({ type: z.literal("share"), dishId: z.string().uuid(), channel: z.string().trim().min(1).max(40).optional().default("native") }),
 ]);
 
 function json(data: unknown, status = 200) {
@@ -39,16 +40,10 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) return json({ error: "Authentication required." }, 401);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) return json({ error: "Backend is not configured." }, 500);
-
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
-    const { data: { user }, error: userError } = await authClient.auth.getUser();
-    if (userError || !user) return json({ error: "Authentication required." }, 401);
 
     const parsed = BodySchema.safeParse(await req.json());
     if (!parsed.success) return json({ error: "Invalid interaction payload.", details: parsed.error.flatten().fieldErrors }, 400);
@@ -56,7 +51,16 @@ serve(async (req) => {
     const input = parsed.data;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    await supabase.from("users").upsert({
+    let user: { id: string; email?: string; user_metadata?: Record<string, string> } | null = null;
+    if (authHeader) {
+      const authClient = createClient(supabaseUrl, supabaseAnonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data, error: userError } = await authClient.auth.getUser();
+      if (!userError && data.user) user = data.user;
+    }
+
+    if (input.type !== "share" && !user) return json({ error: "Authentication required." }, 401);
+
+    if (user) await supabase.from("users").upsert({
       id: user.id,
       email: user.email ?? null,
       display_name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
@@ -71,7 +75,7 @@ serve(async (req) => {
         .from("ratings")
         .upsert({
           dish_id: input.dishId,
-          user_id: user.id,
+          user_id: user!.id,
           rating: input.rating,
           would_order_again: input.metrics?.wouldOrderAgain ?? null,
           temperature_rating: input.metrics?.temperature ?? null,
@@ -91,7 +95,7 @@ serve(async (req) => {
       if (input.review?.trim() || input.pricePaid != null) {
         const { data: reviewRow, error: reviewError } = await supabase
           .from("reviews")
-          .upsert({ dish_id: input.dishId, user_id: user.id, rating_id: rating.id, body: input.review?.trim() || null, price_paid: input.pricePaid ?? null, currency: "USD", is_public: true }, { onConflict: "rating_id" })
+          .upsert({ dish_id: input.dishId, user_id: user!.id, rating_id: rating.id, body: input.review?.trim() || null, price_paid: input.pricePaid ?? null, currency: "USD", is_public: true }, { onConflict: "rating_id" })
           .select("id,body,price_paid")
           .single();
         if (reviewError) {
@@ -105,17 +109,27 @@ serve(async (req) => {
       for (const tagName of tags) {
         const tagSlug = slugify(tagName);
         const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
-        if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user.id });
+        if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user!.id });
       }
 
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
       return json({ rating, review, dish: updatedDish });
     }
 
+    if (input.type === "share") {
+      const { error } = await supabase.from("dish_share_events").insert({ dish_id: input.dishId, user_id: user?.id ?? null, share_channel: input.channel });
+      if (error) {
+        console.error("Share event insert failed", error);
+        return json({ error: "Could not record share." }, 500);
+      }
+      const { data: trend } = await supabase.from("dish_trend_metrics").select("*").eq("dish_id", input.dishId).maybeSingle();
+      return json({ shared: true, trend });
+    }
+
     if (input.enabled) {
       const { error } = await supabase
         .from("saved_items")
-        .upsert({ user_id: user.id, dish_id: input.dishId, action_type: input.action }, { onConflict: "user_id,dish_id,action_type" });
+        .upsert({ user_id: user!.id, dish_id: input.dishId, action_type: input.action }, { onConflict: "user_id,dish_id,action_type" });
       if (error) {
         console.error("Action upsert failed", error);
         return json({ error: "Could not save dish action." }, 500);
@@ -124,7 +138,7 @@ serve(async (req) => {
       const { error } = await supabase
         .from("saved_items")
         .delete()
-        .eq("user_id", user.id)
+        .eq("user_id", user!.id)
         .eq("dish_id", input.dishId)
         .eq("action_type", input.action);
       if (error) {
