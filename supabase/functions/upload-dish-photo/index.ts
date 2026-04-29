@@ -7,6 +7,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+
 const BodySchema = z.object({
   dishId: z.string().uuid(),
   imageBase64: z.string().min(100).max(12_000_000),
@@ -72,7 +74,7 @@ serve(async (req) => {
       return json({ error: "Could not upload image." }, 500);
     }
 
-    const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, 60 * 60 * 24 * 7);
+    const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
     const { data: photo, error: photoError } = await supabase
       .from("photos")
       .insert({
