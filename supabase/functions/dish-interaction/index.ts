@@ -165,8 +165,22 @@ serve(async (req) => {
       avatar_url: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
     });
 
-    const { data: dish } = await supabase.from("dishes").select("id,is_published").eq("id", input.dishId).maybeSingle();
+    const { data: dish } = await supabase.from("dishes").select("id,name,cuisine,is_published,restaurants(name)").eq("id", input.dishId).maybeSingle();
     if (!dish) return json({ error: "Dish not found." }, 404);
+
+    if (input.type === "suggest_caption") {
+      const tags = [...new Set((input.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8);
+      const restaurant = Array.isArray(dish.restaurants) ? dish.restaurants[0] : dish.restaurants;
+      const context = { dishName: dish.name, cuisine: dish.cuisine, restaurantName: restaurant?.name ?? null, rating: input.rating, tags, metrics: input.metrics ?? {} };
+      const inputHash = await sha256Hex(JSON.stringify(context));
+      const { data: cached } = await supabase.from("review_caption_suggestions").select("id,caption,status,error").eq("user_id", user!.id).eq("dish_id", input.dishId).eq("input_hash", inputHash).maybeSingle();
+      if (cached?.status === "completed" && cached.caption) return json({ suggestion: cached, cached: true });
+
+      const { data: suggestion, error: suggestionError } = await supabase.from("review_caption_suggestions").upsert({ user_id: user!.id, dish_id: input.dishId, input_hash: inputHash, status: "pending", error: null, generated_from: context }, { onConflict: "user_id,dish_id,input_hash" }).select("id,caption,status,error").single();
+      if (suggestionError || !suggestion) return json({ error: "Could not prepare caption suggestion." }, 500);
+      EdgeRuntime.waitUntil(generateCaptionSuggestion(supabase, suggestion.id, context).catch((error) => console.error("caption suggestion failed", error)));
+      return json({ suggestion, cached: false });
+    }
 
     if (input.type === "rate") {
       const { data: rating, error: ratingError } = await supabase
