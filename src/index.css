@@ -99,14 +99,14 @@ All colors MUST be HSL.
 
 @layer components {
   .glass-surface {
-    @apply border border-border/60 bg-card/82 shadow-[var(--shadow-soft)] backdrop-blur-xl;
+    @apply border border-border/60 bg-card/80 shadow-[var(--shadow-soft)] backdrop-blur-xl;
   }
 
   .thumb-action {
-    @apply flex size-12 items-center justify-center rounded-full border border-foreground/15 bg-background/78 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
+    @apply flex size-12 items-center justify-center rounded-full border border-foreground/15 bg-background/80 text-foreground shadow-[var(--shadow-soft)] backdrop-blur-xl transition active:scale-95;
   }
 
   .soft-chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-background/72 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
+    @apply inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-background/75 px-3 py-1 text-xs font-bold text-foreground shadow-[var(--shadow-soft)] backdrop-blur-md;
   }
 }
