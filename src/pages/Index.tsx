@@ -802,7 +802,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   return (
     <section className="-mx-3 max-w-[calc(100%+1.5rem)] space-y-4 overflow-hidden md:mx-0 md:max-w-full">
       <div className="relative min-h-[calc(100svh-108px)] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/60 md:min-h-[760px] md:rounded-[32px]">
-        <div className="flex h-full snap-x snap-mandatory overflow-x-auto">
+        <div className="flex h-full max-w-full snap-x snap-mandatory overflow-hidden">
           {[item.cover_image_url].filter(Boolean).map((photo) => <div key={photo} className="image-skeleton h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center sm:min-h-[620px] md:h-[760px]"><img src={photo!} alt={`${item.name} menu item`} className="h-full w-full object-cover" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 760px, 100vw" width={900} height={1200} /></div>)}
           {!item.cover_image_url && <div className="flex h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center items-center justify-center bg-secondary sm:min-h-[620px] md:h-[760px]"><ChefHat className="size-20 opacity-40" /></div>}
         </div>
@@ -823,7 +823,7 @@ const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string
 
 const RelatedDishes = ({ tags, currentName }: { tags: string[]; currentName: string }) => {
   const suggestions = tags.length ? tags : [currentName];
-  return <section className="max-w-full overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">You might also like</h2><div className="mt-3 flex max-w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-1 lg:grid lg:grid-cols-1 lg:overflow-visible">{suggestions.map((tag) => <a key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="min-w-32 max-w-[calc(100vw-3rem)] shrink-0 rounded-2xl bg-secondary/70 p-3 transition active:scale-95 lg:min-w-0 lg:max-w-none"><p className="text-sm font-black line-clamp-1">{tag}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Explore dishes</p></a>)}</div></section>;
+  return <section className="max-w-full overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">You might also like</h2><div className="mt-3 grid max-w-full min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-1">{suggestions.map((tag) => <a key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="min-w-0 rounded-2xl bg-secondary/70 p-3 transition active:scale-95"><p className="text-sm font-black line-clamp-1">{tag}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Explore dishes</p></a>)}</div></section>;
 };
 
 const FeedErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => <section className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">Could not load dishes</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">{message}</p><Button className="mt-4 rounded-full" onClick={onRetry}>Retry</Button></section>;
