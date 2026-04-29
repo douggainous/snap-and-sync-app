@@ -277,13 +277,13 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
 
   return (
     <article className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/60">
-      <a href={`/items/${item.slug}`} className="group relative block min-h-[74vh] overflow-hidden bg-secondary sm:min-h-[680px]">
+      <div className="group relative block min-h-[74vh] overflow-hidden bg-secondary sm:min-h-[680px]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" width={960} height={1280} /> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/18 to-background/5" />
         <div className="absolute left-4 top-4 soft-chip text-accent"><Star className="size-4 fill-current" />{item.aggregate_rating}</div>
         <div className="absolute bottom-0 left-0 right-16 p-4 pb-6 text-foreground sm:p-7">
           <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-background/78 px-3 py-1 text-xs font-black text-foreground backdrop-blur-md"><MapPin className="size-3 shrink-0 text-accent" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</span></p>
-          <h2 className="font-display text-4xl font-black leading-[0.95] sm:text-6xl">{item.name}</h2>
+          <a href={`/items/${item.slug}`} className="block"><h2 className="font-display text-4xl font-black leading-[0.95] sm:text-6xl">{item.name}</h2></a>
           {item.description && <p className="mt-2 line-clamp-1 max-w-2xl text-sm font-semibold text-foreground/78 sm:text-base">{item.description}</p>}
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-bold text-foreground/80"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span><span>·</span><span>{item.photo_count} photos</span></div>
         </div>
@@ -292,7 +292,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
           <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
           <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); void shareItem(); }} aria-label="Share dish"><Share2 className="size-5" /></button>
         </div>
-      </a>
+      </div>
       <div className="flex gap-2 overflow-x-auto px-3 py-3 sm:px-5">
         {item.review_count > 0 ? <Button size="sm" className="shrink-0 rounded-full" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" className="shrink-0 rounded-full" onClick={() => onFirstReview?.(item)}><Star />Review first</Button>}
         <Button asChild variant="outline" size="sm" className="shrink-0 rounded-full"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button>
