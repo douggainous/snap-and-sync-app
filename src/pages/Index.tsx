@@ -712,6 +712,11 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-2xl bg-secondary/80 p-3"><Icon className="mb-2 size-5 text-accent" /><p className="font-display text-xl font-black">{value}</p><p className="text-[11px] font-bold text-muted-foreground">{label}</p></div>;
 
+const RelatedDishes = ({ tags, currentName }: { tags: string[]; currentName: string }) => {
+  const suggestions = tags.length ? tags : [currentName];
+  return <section className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">You might also like</h2><div className="mt-3 flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-1">{suggestions.map((tag) => <a key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="min-w-36 rounded-2xl bg-secondary/70 p-3 transition active:scale-95"><p className="text-sm font-black line-clamp-1">{tag}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Explore dishes</p></a>)}</div></section>;
+};
+
 const SearchResultsLoader = () => <div className="space-y-5" aria-label="Loading search results" aria-live="polite">{[0, 1].map((item) => <div key={item} className="overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/60"><div className="h-[74vh] min-h-96 animate-pulse bg-secondary" /><div className="flex gap-2 p-3"><span className="h-10 w-24 animate-pulse rounded-full bg-primary/30" /><span className="h-10 w-28 animate-pulse rounded-full bg-muted" /></div></div>)}</div>;
 
 
