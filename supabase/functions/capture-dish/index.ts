@@ -17,6 +17,7 @@ const BodySchema = z.object({
   mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]).optional(),
   fileName: z.string().trim().max(160).optional(),
   images: z.array(z.object({ imageBase64: z.string().min(100).max(12_000_000), mimeType: z.enum(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]), fileName: z.string().trim().max(160).optional() })).max(6).optional(),
+  forceNewDish: z.boolean().default(false),
   rating: z.number().min(1).max(5).optional(),
   review: z.string().trim().max(1200).optional().nullable(),
   pricePaid: z.number().min(0).max(10000).optional().nullable(),
@@ -40,6 +41,15 @@ const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
+const normalizeName = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+const tokenSet = (value: string) => new Set(normalizeName(value).split(" ").filter((token) => token.length > 1));
+const jaccard = (a: Set<string>, b: Set<string>) => {
+  const union = new Set([...a, ...b]);
+  if (!union.size) return 0;
+  let intersection = 0;
+  for (const token of a) if (b.has(token)) intersection += 1;
+  return intersection / union.size;
+};
 const sha256Hex = async (bytes: Uint8Array) => {
   const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -78,6 +88,46 @@ async function recognizeDish(imageBase64: string, mimeType: string, context: { d
   return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, cuisine: parsed.cuisine?.trim().slice(0, 80) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), ingredients: [...new Set((parsed.ingredients ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence, confidenceLevel: confidenceLevel(confidence), rawResult: parsed, error: null };
 }
 
+async function findDishMatch(supabase: ReturnType<typeof createClient>, input: { dishName: string; tags: string[]; restaurantId: string | null; imageHash: string | null }) {
+  const inputName = normalizeName(input.dishName);
+  const inputTokens = tokenSet(input.dishName);
+  const inputTags = new Set(input.tags.map(cleanTag).filter(Boolean));
+  const candidates = new Map<string, { id: string; name: string; restaurant_id: string | null; aggregate_rating?: number | null; rating_count?: number | null; tags: string[]; imageExact: boolean }>();
+
+  if (input.imageHash) {
+    const { data } = await supabase.from("photos").select("dish_id,dishes(id,name,restaurant_id,aggregate_rating,rating_count,is_published)").eq("image_hash", input.imageHash).limit(6);
+    for (const row of data ?? []) {
+      const dish = Array.isArray(row.dishes) ? row.dishes[0] : row.dishes;
+      if (dish?.id && dish.is_published) candidates.set(dish.id, { id: dish.id, name: dish.name, restaurant_id: dish.restaurant_id, aggregate_rating: dish.aggregate_rating, rating_count: dish.rating_count, tags: [], imageExact: true });
+    }
+  }
+
+  let query = supabase.from("dishes").select("id,name,restaurant_id,aggregate_rating,rating_count,dish_tags(tags(name))").eq("is_published", true).limit(18);
+  if (input.restaurantId) query = query.eq("restaurant_id", input.restaurantId);
+  else query = query.ilike("normalized_name", `%${inputName.slice(0, 48)}%`);
+  const { data: nameRows } = await query;
+  for (const row of nameRows ?? []) {
+    const tags = ((row.dish_tags ?? []) as Array<{ tags?: { name?: string } | null }>).map((item) => item.tags?.name).filter(Boolean) as string[];
+    const existing = candidates.get(row.id);
+    candidates.set(row.id, { id: row.id, name: row.name, restaurant_id: row.restaurant_id, aggregate_rating: row.aggregate_rating, rating_count: row.rating_count, tags: existing?.tags?.length ? existing.tags : tags, imageExact: existing?.imageExact ?? false });
+  }
+
+  let best: { dishId: string; score: number; reasons: string[]; dishName: string } | null = null;
+  for (const candidate of candidates.values()) {
+    const candidateName = normalizeName(candidate.name);
+    const nameScore = candidateName === inputName ? 0.5 : jaccard(inputTokens, tokenSet(candidate.name)) * 0.42;
+    const restaurantScore = input.restaurantId && candidate.restaurant_id === input.restaurantId ? 0.24 : 0;
+    const tagOverlap = candidate.tags.map(cleanTag).filter((tag) => inputTags.has(tag)).length;
+    const tagScore = Math.min(0.16, tagOverlap * 0.06);
+    const imageScore = candidate.imageExact ? 0.4 : 0;
+    const qualityFloor = (candidate.aggregate_rating ?? 0) >= 3.5 || (candidate.rating_count ?? 0) === 0 ? 0.02 : -0.08;
+    const score = Math.max(0, Math.min(1, nameScore + restaurantScore + tagScore + imageScore + qualityFloor));
+    const reasons = [candidate.imageExact ? "same image" : null, nameScore >= 0.42 ? "same dish name" : nameScore >= 0.24 ? "similar dish name" : null, restaurantScore ? "same restaurant" : null, tagOverlap ? "matching tags" : null].filter(Boolean) as string[];
+    if (score >= 0.72 && (!best || score > best.score)) best = { dishId: candidate.id, score, reasons, dishName: candidate.name };
+  }
+  return best;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -108,44 +158,56 @@ serve(async (req) => {
       avatar_url: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
     });
 
+    const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
+    let firstImageHash: string | null = null;
+    try {
+      firstImageHash = await sha256Hex(Uint8Array.from(atob(images[0].imageBase64), (char) => char.charCodeAt(0)));
+    } catch {
+      firstImageHash = null;
+    }
+
     let restaurantId: string | null = null;
     if (input.restaurantName) {
-      const restaurantSlug = `${slugify(input.restaurantName)}-${crypto.randomUUID().slice(0, 8)}`;
-      const { data: restaurant, error } = await supabase
-        .from("restaurants")
-        .insert({ name: input.restaurantName, slug: restaurantSlug, normalized_name: input.restaurantName.toLowerCase(), created_by: user.id })
-        .select("id,name,slug")
-        .single();
-      if (error) {
-        console.error("Restaurant creation failed", error);
-        return json({ error: "Could not save restaurant." }, 500);
+      const normalizedRestaurant = normalizeName(input.restaurantName);
+      const { data: existingRestaurant } = await supabase.from("restaurants").select("id").eq("normalized_name", normalizedRestaurant).limit(1).maybeSingle();
+      if (existingRestaurant?.id) restaurantId = existingRestaurant.id;
+      else {
+        const restaurantSlug = `${slugify(input.restaurantName)}-${crypto.randomUUID().slice(0, 8)}`;
+        const { data: restaurant, error } = await supabase
+          .from("restaurants")
+          .insert({ name: input.restaurantName, slug: restaurantSlug, normalized_name: normalizedRestaurant, created_by: user.id })
+          .select("id,name,slug")
+          .single();
+        if (error) {
+          console.error("Restaurant creation failed", error);
+          return json({ error: "Could not save restaurant." }, 500);
+        }
+        restaurantId = restaurant.id;
       }
-      restaurantId = restaurant.id;
     }
 
-    const dishSlug = `${slugify(input.dishName)}-${crypto.randomUUID().slice(0, 8)}`;
-    const { data: dish, error: dishError } = await supabase
-      .from("dishes")
-      .insert({
-        restaurant_id: restaurantId,
-        created_by: user.id,
-        name: input.dishName,
-        slug: dishSlug,
-        normalized_name: input.dishName.toLowerCase(),
-        typical_price: input.pricePaid ?? null,
-        currency: "USD",
-        is_published: true,
-      })
-      .select("id,name,slug,restaurant_id,created_at")
-      .single();
-    if (dishError) {
-      console.error("Dish creation failed", dishError);
-      return json({ error: "Could not save dish." }, 500);
+    const dishMatch = await findDishMatch(supabase, { dishName: input.dishName, tags: input.tags, restaurantId, imageHash: firstImageHash });
+    const shouldUseMatch = Boolean(dishMatch && !input.forceNewDish);
+    let dish: { id: string; name: string; slug: string; restaurant_id: string | null; created_at?: string | null };
+    if (shouldUseMatch && dishMatch) {
+      const { data: matchedDish, error } = await supabase.from("dishes").select("id,name,slug,restaurant_id,created_at").eq("id", dishMatch.dishId).single();
+      if (error || !matchedDish) return json({ error: "Could not attach to matched dish." }, 500);
+      dish = matchedDish;
+    } else {
+      const dishSlug = `${slugify(input.dishName)}-${crypto.randomUUID().slice(0, 8)}`;
+      const { data: newDish, error: dishError } = await supabase
+        .from("dishes")
+        .insert({ restaurant_id: restaurantId, created_by: user.id, name: input.dishName, slug: dishSlug, normalized_name: normalizeName(input.dishName), typical_price: input.pricePaid ?? null, currency: "USD", is_published: true })
+        .select("id,name,slug,restaurant_id,created_at")
+        .single();
+      if (dishError) {
+        console.error("Dish creation failed", dishError);
+        return json({ error: "Could not save dish." }, 500);
+      }
+      dish = newDish;
     }
 
-    const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
     const photos = [];
-    let firstImageHash: string | null = null;
     for (const [index, image] of images.entries()) {
       const binary = Uint8Array.from(atob(image.imageBase64), (char) => char.charCodeAt(0));
       if (binary.byteLength > 8 * 1024 * 1024) return json({ error: "Each image must be 8MB or smaller." }, 413);
@@ -155,15 +217,16 @@ serve(async (req) => {
       const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
       if (upload.error) return json({ error: "Could not upload photo." }, 500);
       const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
-      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested" }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients").single();
+      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested", matched_existing_dish_id: dishMatch?.dishId ?? null, dish_match_status: shouldUseMatch ? "matched" : input.forceNewDish && dishMatch ? "user_override" : "created_new", dish_match_score: dishMatch?.score ?? null, dish_match_reasons: dishMatch?.reasons ?? [] }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients,dish_match_status,dish_match_score,dish_match_reasons,matched_existing_dish_id").single();
       if (photoError) {
         await supabase.storage.from("dish-photos").remove([path]);
         return json({ error: "Could not save photo record." }, 500);
       }
       photos.push(photo);
+      if (index === 0 && input.forceNewDish && dishMatch) await supabase.from("dish_match_overrides").insert({ user_id: user.id, photo_id: photo.id, original_dish_id: dishMatch.dishId, override_dish_id: dish.id, reason: "User saved as a separate dish during capture." });
     }
 
-    await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
+    if (!shouldUseMatch) await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
 
     let cachedAi: { status: string; dish_name?: string | null; cuisine?: string | null; tags?: string[] | null; ingredients?: string[] | null; confidence?: number | null; confidence_level?: string | null; error?: string | null } | null = null;
     if (firstImageHash && photos[0]) {
@@ -229,7 +292,7 @@ serve(async (req) => {
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
+    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, dishMatch: shouldUseMatch && dishMatch ? { status: "matched", dishId: dishMatch.dishId, dishName: dishMatch.dishName, score: dishMatch.score, reasons: dishMatch.reasons } : input.forceNewDish && dishMatch ? { status: "user_override", dishId: dish.id, dishName: dish.name, score: dishMatch.score, reasons: dishMatch.reasons } : { status: "created_new", dishId: dish.id, dishName: dish.name, score: null, reasons: [] }, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);
