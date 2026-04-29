@@ -308,7 +308,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
   const trendLabel = item.trend_labels?.[0];
 
   return (
-    <article className="feed-reel group relative -mx-3 w-[calc(100%+1.5rem)] max-w-[calc(100%+1.5rem)] min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:w-full md:max-w-full md:min-h-[760px] md:rounded-[32px]">
+    <article className="feed-reel group relative -mx-3 min-h-[calc(100svh-148px)] overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:mx-0 md:w-full md:max-w-full md:min-h-[760px] md:rounded-[32px]">
         {item.cover_image_url ? <div className="image-skeleton absolute inset-0"><img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-active:scale-[1.02] group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 760px, 100vw" width={720} height={960} /></div> : <div className="absolute inset-0 flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-24 opacity-50" /></div>}
       <div className="absolute inset-0 bg-gradient-to-t from-background via-background/28 to-transparent" />
       <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background/55 to-transparent" />
@@ -723,7 +723,7 @@ const Index = () => {
           {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
 
           {view === "scan" && (
-            <section className="-mx-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden md:mx-0 md:max-w-full">
+            <section className="-mx-3 space-y-3 overflow-hidden md:mx-0">
               <div className="relative min-h-[calc(100svh-164px)] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/55 md:rounded-[32px]">
                 {photoPreviews.length ? <img src={photoPreviews[0]} alt="Captured dish" className="absolute inset-0 h-full w-full object-cover animate-scale-in" decoding="async" /> : <button onClick={captureReviewPhoto} className="absolute inset-0 flex w-full flex-col items-center justify-center gap-6 bg-secondary text-foreground"><span className="flex size-32 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-editorial)] transition active:scale-95"><CameraIcon className="size-14" /></span><span className="soft-chip text-accent"><Sparkles className="size-4" />Point. Snap. Rate.</span></button>}
                 <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-background via-background/14 to-background/35" />
@@ -745,7 +745,7 @@ const Index = () => {
         </div>
       </section>
 
-      <nav className="fixed inset-x-3 bottom-3 z-20 grid min-w-0 grid-cols-5 items-center overflow-hidden rounded-full glass-surface p-1.5 md:hidden">
+      <nav className="fixed bottom-3 left-3 right-3 z-20 grid min-w-0 grid-cols-5 items-center overflow-hidden rounded-full glass-surface p-1.5 md:hidden">
         {navItems.slice(0, 2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
         <button onClick={() => setSearchPanelOpen((open) => !open)} className={cn("mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-[var(--shadow-editorial)] transition active:scale-95 sm:size-14", searchPanelOpen && "bg-primary text-primary-foreground")} aria-label="Open search"><Search className="size-6" /></button>
         {navItems.slice(2).map((item) => <button key={item.id} onClick={() => { setSearchPanelOpen(false); setView(item.id); if (item.id !== "discover") navigate("/"); }} className={cn("flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-full px-1 text-[10px] font-bold text-muted-foreground", view === item.id && "bg-primary text-primary-foreground")}><item.icon className="size-5" /><span className="truncate">{item.label}</span></button>)}
@@ -800,7 +800,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   const isTrending = Boolean(trendLabel) || item.aggregate_rating >= 4.5 || (item.review_count ?? 0) >= 10 || (item.favorite_count ?? 0) >= 10;
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   return (
-    <section className="-mx-3 max-w-[calc(100%+1.5rem)] space-y-4 overflow-hidden md:mx-0 md:max-w-full">
+    <section className="-mx-3 space-y-4 overflow-hidden md:mx-0">
       <div className="relative min-h-[calc(100svh-108px)] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/60 md:min-h-[760px] md:rounded-[32px]">
         <div className="flex h-full max-w-full snap-x snap-mandatory overflow-hidden">
           {[item.cover_image_url].filter(Boolean).map((photo) => <div key={photo} className="image-skeleton h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center sm:min-h-[620px] md:h-[760px]"><img src={photo!} alt={`${item.name} menu item`} className="h-full w-full object-cover" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 760px, 100vw" width={900} height={1200} /></div>)}
