@@ -109,7 +109,6 @@ serve(async (req) => {
         if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: input.dishId, tag_id: tag.id, created_by: user.id });
       }
 
-      await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
       const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
       return json({ rating, review, dish: updatedDish });
     }
@@ -120,7 +119,7 @@ serve(async (req) => {
         console.error("Share event insert failed", error);
         return json({ error: "Could not record share." }, 500);
       }
-      const { data: trend } = await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
+      const { data: trend } = await supabase.from("dish_trend_metrics").select("*").eq("dish_id", input.dishId).maybeSingle();
       return json({ shared: true, trend });
     }
 
@@ -145,7 +144,6 @@ serve(async (req) => {
       }
     }
 
-    await supabase.rpc("refresh_dish_trend_metrics", { _dish_id: input.dishId });
     const { data: updatedDish } = await supabase.from("dishes").select("id,aggregate_rating,rating_count,review_count,want_to_try_count,favorite_count,trending_score").eq("id", input.dishId).single();
     return json({ action: input.action, enabled: input.enabled, dish: updatedDish });
   } catch (error) {
