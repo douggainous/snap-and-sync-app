@@ -531,6 +531,15 @@ const Index = () => {
     else toast({ title: "Ready", description: message.replace("Sign in to ", "You can now ") });
   };
 
+  const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite") => {
+    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
+    if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
+    const { data, error } = await supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled: true } });
+    if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
+    setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish } : row));
+    toast({ title: action === "favorite" ? "Favorited" : "Saved to want to try", description: "Your dish interaction is stored." });
+  };
+
   const startFirstReview = (item: MenuItem) => {
     setScanRestaurant(item.restaurants?.name ?? "");
     setScanDish(item.name);
@@ -636,7 +645,7 @@ const Index = () => {
               </section>
               <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />
               <div className="flex items-center justify-between"><div><h2 className="font-display text-3xl font-black">Today’s cravings</h2><p className="text-sm text-muted-foreground">Image-first picks ranked by rating, photos, reviews, and relevance.</p></div>{loading && <Loader2 className="animate-spin text-accent" />}</div>
-              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : <div className="space-y-6">{displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onSave={setFavoriteTarget} onFirstReview={startFirstReview} onDishAction={toggleDishAction} />)}<div ref={loadMoreRef} className="flex min-h-24 items-center justify-center rounded-lg border border-dashed bg-card/70 p-4 text-sm font-bold text-muted-foreground">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-accent" />Loading more cravings…</> : hasMoreItems ? "Scroll for more" : "You’re all caught up"}</div></div>}
             </>
           )}
 
