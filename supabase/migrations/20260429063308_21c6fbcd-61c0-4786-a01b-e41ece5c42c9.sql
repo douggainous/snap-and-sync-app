@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_photos_image_hash ON public.photos(image_hash) WHERE image_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_dishes_restaurant_normalized_name ON public.dishes(restaurant_id, normalized_name) WHERE is_published = true;
