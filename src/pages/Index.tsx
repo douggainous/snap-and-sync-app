@@ -390,6 +390,12 @@ const Index = () => {
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
 
+  useEffect(() => {
+    if (selectedSlug || listSlug) return;
+    if (location.pathname === "/search") setView("search");
+    else if (location.pathname === "/") setView((current) => current === "search" ? "discover" : current);
+  }, [location.pathname, selectedSlug, listSlug]);
+
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
   useEffect(() => {
@@ -515,22 +521,25 @@ const Index = () => {
   }, [searchParams]);
 
   useEffect(() => {
-    if (view !== "discover" || selectedSlug || listSlug) return;
+    if ((view !== "discover" && view !== "search") || selectedSlug || listSlug) return;
     const handle = window.setTimeout(() => {
-      void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
+      if (view === "discover") void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+      else void loadItems(query, false, feedMode, userLocation, { cuisine: cuisineFilter, rating: minRating, sort: searchSort });
     }, 220);
     return () => window.clearTimeout(handle);
   }, [view, selectedSlug, listSlug, query, feedMode, userLocation, cuisineFilter, minRating, searchSort, loadItems]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
-    if (!node || view !== "discover" || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
+    if (!node || (view !== "discover" && view !== "search") || selectedItem || listSlug || !hasMoreItems || loading || loadingMore) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) void loadItems(query, true, feedMode, userLocation);
+      if (!entries[0]?.isIntersecting) return;
+      if (view === "discover") void loadItems("", true, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+      else void loadItems(query, true, feedMode, userLocation);
     }, { rootMargin: "700px 0px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation]);
+  }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation, loadItems]);
 
   useEffect(() => {
     if (sessionUser || selectedSlug || listSlug || view !== "discover" || guestFeedPromptShownRef.current || items.length < 4) return;
