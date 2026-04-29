@@ -788,19 +788,10 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     const firstFile = await optimizeImageFile(imageFiles[0]);
     const imageBase64 = await fileToBase64(firstFile);
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const slug = `${slugify(parsed.data.dish_name)}-${Date.now()}`;
-    const { data: restaurant, error: restaurantError } = await supabase.from("restaurants").insert({ name: parsed.data.restaurant_name, slug: `${slugify(parsed.data.restaurant_name)}-${Date.now()}`, normalized_name: parsed.data.restaurant_name.toLowerCase(), created_by: sessionUser.id }).select("id").single();
-    if (restaurantError) { setSaving(false); return toast({ title: "Restaurant not saved", description: restaurantError.message, variant: "destructive" }); }
-    const { data: dish, error: dishError } = await supabase.from("dishes").insert({ restaurant_id: restaurant.id, created_by: sessionUser.id, name: parsed.data.dish_name, slug, normalized_name: parsed.data.dish_name.toLowerCase(), typical_price: parsed.data.price_paid ?? null, currency: "USD", is_published: true }).select("id").single();
-    if (dishError) { setSaving(false); return toast({ title: "Dish not saved", description: dishError.message, variant: "destructive" }); }
-    const upload = await supabase.functions.invoke("upload-dish-photo", { body: { dishId: dish.id, imageBase64, mimeType: firstFile.type, fileName: firstFile.name, altText: `${parsed.data.dish_name} at ${parsed.data.restaurant_name}` } });
-    if (upload.error || upload.data?.error) { setSaving(false); return toast({ title: "Photo upload failed", description: upload.data?.error ?? upload.error?.message ?? "Try again.", variant: "destructive" }); }
-    const { data: ratingRow, error: ratingError } = await supabase.from("ratings").insert({ dish_id: dish.id, user_id: sessionUser.id, rating: parsed.data.rating, would_order_again: parsed.data.would_order_again, temperature_rating: parsed.data.temperature_rating, spiciness_rating: parsed.data.spiciness_rating, sweet_savory_rating: parsed.data.sweet_savory_rating, flavor_intensity_rating: parsed.data.flavor_intensity_rating, is_public: true }).select("id").single();
-    if (ratingError) { setSaving(false); return toast({ title: "Rating not saved", description: ratingError.message, variant: "destructive" }); }
-    const { error } = await supabase.from("reviews").insert({ dish_id: dish.id, user_id: sessionUser.id, rating_id: ratingRow.id, body: parsed.data.review || null, price_paid: parsed.data.price_paid ?? null, currency: "USD", is_public: true });
+    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, imageBase64, mimeType: firstFile.type, fileName: firstFile.name, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
     setSaving(false);
-    if (error) return toast({ title: "Review not published", description: error.message, variant: "destructive" });
-    toast({ title: "Review published", description: "Your photo review is saved to your food journal." });
+    if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
+    toast({ title: "Dish saved", description: "Your photo, dish, rating, and review are stored." });
     setReview(""); setPricePaid(""); setTags(""); onPublished();
   };
 
