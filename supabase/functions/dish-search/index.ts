@@ -93,6 +93,8 @@ type UserSignals = {
   savedDishIds: Set<string>;
 };
 
+type Sponsorship = { dish_id: string; label: string; sponsor_name?: string | null; boost_score: number; target_cuisine?: string | null; target_city?: string | null };
+
 const intentWords = /\b(best|top|great|popular|trending|near|nearby|me|around|dish|dishes|food|foods|restaurant|restaurants)\b/gi;
 
 function json(data: unknown, status = 200) {
@@ -149,6 +151,16 @@ function preferenceBoost(dish: DishRow, userSignals: UserSignals) {
   const stated = userSignals.preferredCuisines.has(cuisine) ? 16 : 0;
   const saved = Math.min(14, (userSignals.savedCuisines.get(cuisine) ?? 0) * 4);
   return stated + saved + ratingAffinity + (userSignals.savedDishIds.has(dish.id) ? -8 : 0);
+}
+
+function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null, terms = "") {
+  if (!sponsor) return false;
+  const cuisine = (dish.cuisine ?? restaurant?.cuisine ?? "").toLowerCase();
+  const city = (restaurant?.city ?? "").toLowerCase();
+  const text = `${dish.name} ${dish.description ?? ""} ${cuisine} ${restaurant?.name ?? ""}`.toLowerCase();
+  return (!sponsor.target_cuisine || cuisine.includes(sponsor.target_cuisine.toLowerCase()))
+    && (!sponsor.target_city || city.includes(sponsor.target_city.toLowerCase()))
+    && (!terms || text.includes(terms) || terms.split(" ").some((term) => term.length > 2 && text.includes(term)));
 }
 
 serve(async (req) => {
@@ -279,6 +291,7 @@ serve(async (req) => {
 
     const actionsByDishId = new Map<string, Set<string>>();
     const trendByDishId = new Map<string, TrendMetric>();
+    const sponsorshipByDishId = new Map<string, Sponsorship>();
     const userSignals: UserSignals = { preferredCuisines: new Set(), savedCuisines: new Map(), cuisineRatings: new Map(), savedDishIds: new Set() };
     if (userId && dishIds.length) {
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(100);
@@ -305,6 +318,11 @@ serve(async (req) => {
       const { data: trends, error } = await supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_favorite_count,recent_rating_count,recent_review_count,recent_share_count,save_velocity,favorite_velocity,rating_velocity,review_velocity,share_velocity,spike_score,location_spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds);
       if (error) console.error("trend metric lookup failed", error);
       for (const trend of (trends ?? []) as TrendMetric[]) trendByDishId.set(trend.dish_id, trend);
+
+      const now = new Date().toISOString();
+      const { data: sponsorships, error: sponsorError } = await supabase.from("dish_sponsorships").select("dish_id,label,sponsor_name,boost_score,target_cuisine,target_city").in("dish_id", dishIds).eq("is_active", true).lte("starts_at", now).or(`ends_at.is.null,ends_at.gt.${now}`).order("boost_score", { ascending: false });
+      if (sponsorError) console.error("sponsorship lookup failed", sponsorError);
+      for (const sponsor of (sponsorships ?? []) as Sponsorship[]) if (!sponsorshipByDishId.has(sponsor.dish_id)) sponsorshipByDishId.set(sponsor.dish_id, sponsor);
     }
 
     let ranked = dishes.map((dish) => {
@@ -315,10 +333,13 @@ serve(async (req) => {
       const restaurantHit = terms && restaurant?.name.toLowerCase().includes(terms) ? 12 : 0;
       const distancePenalty = distance == null ? 0 : Math.min(distance * 2, 80);
       const trend = trendByDishId.get(dish.id);
+      const sponsor = sponsorshipByDishId.get(dish.id);
+      const isRelevantSponsor = sponsorshipMatches(sponsor, dish, restaurant, terms);
       const engagement = engagementScore(dish);
       const velocity = trendBoost(trend);
       const personalization = preferenceBoost(dish, userSignals);
-      const score = nameHit + cuisineHit + restaurantHit + engagement + velocity + personalization - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
+      const sponsorBoost = isRelevantSponsor ? Math.min(10, Number(sponsor?.boost_score ?? 0)) : 0;
+      const score = nameHit + cuisineHit + restaurantHit + engagement + velocity + personalization + sponsorBoost - (input.sort === "nearby" ? distancePenalty : distancePenalty * 0.25);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
       const photo = photosByDishId.get(dish.id);
@@ -338,8 +359,10 @@ serve(async (req) => {
           personalization: Number(personalization.toFixed(2)),
         },
         trend_status: trendStatus,
-        trend_labels: trendLabels,
+        trend_labels: isRelevantSponsor ? [sponsor?.label || "Sponsored", ...trendLabels] : trendLabels,
         trend_metrics: trend ?? null,
+        is_sponsored: isRelevantSponsor,
+        sponsorship: isRelevantSponsor ? sponsor : null,
       };
     });
 
@@ -348,6 +371,14 @@ serve(async (req) => {
     else if (input.sort === "rating") ranked.sort((a, b) => Number(b.aggregate_rating) - Number(a.aggregate_rating) || Number(b.rating_count) - Number(a.rating_count));
     else if (input.sort === "recent") ranked.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     else ranked.sort((a, b) => b.feed_score - a.feed_score);
+
+    if (input.offset === 0) {
+      const sponsorIndex = ranked.findIndex((dish) => dish.is_sponsored);
+      if (sponsorIndex > 3 && sponsorIndex > -1) {
+        const [sponsored] = ranked.splice(sponsorIndex, 1);
+        ranked.splice(Math.min(3, ranked.length), 0, sponsored);
+      }
+    }
 
     const page = input.sort === "nearby" || origin ? ranked.slice(input.offset, input.offset + input.limit) : ranked;
     return json({ items: page, nextOffset: input.offset + page.length, hasMore: page.length === input.limit, query: rawSearch, sort: input.sort });

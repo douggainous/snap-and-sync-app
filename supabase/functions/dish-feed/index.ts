@@ -115,6 +115,15 @@ type TrendMetric = {
   is_hot_nearby: boolean;
 };
 
+type Sponsorship = {
+  dish_id: string;
+  label: string;
+  sponsor_name?: string | null;
+  boost_score: number;
+  target_cuisine?: string | null;
+  target_city?: string | null;
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -146,6 +155,14 @@ function normalizeWeights(input: Partial<typeof DEFAULT_WEIGHTS>) {
 function ageDays(date?: string | null) {
   if (!date) return Number.POSITIVE_INFINITY;
   return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
+}
+
+function sponsorshipMatches(sponsor: Sponsorship | undefined, dish: DishRow, restaurant?: Restaurant | null) {
+  if (!sponsor) return false;
+  const cuisine = (dish.cuisine ?? restaurant?.cuisine ?? "").toLowerCase();
+  const city = (restaurant?.city ?? "").toLowerCase();
+  return (!sponsor.target_cuisine || cuisine.includes(sponsor.target_cuisine.toLowerCase()))
+    && (!sponsor.target_city || city.includes(sponsor.target_city.toLowerCase()));
 }
 
 function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS, trend?: TrendMetric) {
@@ -285,6 +302,7 @@ serve(async (req) => {
 
     const actionsByDishId = new Map<string, Set<string>>();
     const trendByDishId = new Map<string, TrendMetric>();
+    const sponsorshipByDishId = new Map<string, Sponsorship>();
     const userSignals: UserSignals = { preferredCuisines: new Set(), cuisineRatings: new Map(), savedCuisines: new Map(), affinityTags: new Map(), savedDishIds: new Set() };
     if (userId && dishIds.length) {
       const { data: savedActions, error } = await supabase.from("saved_items").select("dish_id,action_type,dishes(cuisine)").eq("user_id", userId).in("action_type", ["saved", "want_to_try", "favorite"]).order("updated_at", { ascending: false }).limit(120);
@@ -323,6 +341,10 @@ serve(async (req) => {
       const { data: trends, error } = await supabase.from("dish_trend_metrics").select("dish_id,recent_save_count,recent_favorite_count,recent_rating_count,recent_review_count,recent_share_count,save_velocity,favorite_velocity,rating_velocity,review_velocity,share_velocity,spike_score,location_spike_score,trend_score,status,is_hot_nearby").in("dish_id", dishIds);
       if (error) console.error("trend metric lookup failed", error);
       for (const trend of (trends ?? []) as TrendMetric[]) trendByDishId.set(trend.dish_id, trend);
+
+      const { data: sponsorships, error: sponsorError } = await supabase.from("dish_sponsorships").select("dish_id,label,sponsor_name,boost_score,target_cuisine,target_city").in("dish_id", dishIds).eq("is_active", true).lte("starts_at", new Date().toISOString()).or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order("boost_score", { ascending: false });
+      if (sponsorError) console.error("sponsorship lookup failed", sponsorError);
+      for (const sponsor of (sponsorships ?? []) as Sponsorship[]) if (!sponsorshipByDishId.has(sponsor.dish_id)) sponsorshipByDishId.set(sponsor.dish_id, sponsor);
     }
 
     const origin = input.latitude != null && input.longitude != null ? { latitude: input.latitude, longitude: input.longitude } : null;
@@ -331,13 +353,15 @@ serve(async (req) => {
       const distance = origin ? distanceMiles(origin, restaurant) : null;
       const itemTags = tagsByDishId.get(dish.id) ?? [];
       const trend = trendByDishId.get(dish.id);
+      const sponsor = sponsorshipByDishId.get(dish.id);
+      const isRelevantSponsor = sponsorshipMatches(sponsor, dish, restaurant);
       const recentFromTrend = { ratings: Number(trend?.recent_rating_count ?? 0), wantToTry: Number(trend?.recent_save_count ?? 0), favorites: Number(trend?.recent_favorite_count ?? 0), saves: Number(trend?.recent_save_count ?? 0) };
       const scoreParts = scoreDish(dish, itemTags, recentFromTrend, userSignals, rankingWeights, trend);
       const score = input.mode === "nearby" && distance != null
-        ? scoreParts.score - distance * 2
+        ? scoreParts.score - distance * 2 + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0)
         : input.mode === "recent"
-          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
-          : scoreParts.score;
+          ? recencyBoost(dish.created_at) + scoreParts.score * 0.35 + (isRelevantSponsor ? Math.min(6, Number(sponsor?.boost_score ?? 0)) : 0)
+          : scoreParts.score + (isRelevantSponsor ? Math.min(12, Number(sponsor?.boost_score ?? 0)) : 0);
       const photo = photosByDishId.get(dish.id);
       const trendStatus = trend?.status === "viral" ? "viral" : trend?.status === "trending" ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby ? "Hot near you" : null].filter(Boolean);
@@ -358,15 +382,22 @@ serve(async (req) => {
           personalization: Number(scoreParts.personalizationScore.toFixed(2)),
         },
         trend_status: trendStatus,
-        trend_labels: trendLabels,
+        trend_labels: isRelevantSponsor ? [sponsor?.label || "Sponsored", ...trendLabels] : trendLabels,
         trend_metrics: trend ?? null,
+        is_sponsored: isRelevantSponsor,
+        sponsorship: isRelevantSponsor ? sponsor : null,
       };
     });
 
-    ranked = ranked
+    const sorted = ranked
       .filter((dish) => input.mode !== "nearby" || (dish.distance_miles != null && dish.distance_miles <= input.radiusMiles))
-      .sort((a, b) => b.feed_score - a.feed_score)
-      .slice(input.mode === "nearby" ? input.offset : 0, (input.mode === "nearby" ? input.offset : 0) + input.limit);
+      .sort((a, b) => b.feed_score - a.feed_score);
+    const organic = sorted.filter((dish) => !dish.is_sponsored);
+    const sponsored = sorted.filter((dish) => dish.is_sponsored).slice(0, 1);
+    const blended = input.offset === 0 && sponsored.length && organic.length >= 4
+      ? [...organic.slice(0, 9), sponsored[0], ...organic.slice(9)]
+      : sorted;
+    ranked = blended.slice(input.mode === "nearby" ? input.offset : 0, (input.mode === "nearby" ? input.offset : 0) + input.limit);
 
     return json({ items: ranked, nextOffset: input.offset + ranked.length, hasMore: ranked.length === input.limit, mode: input.mode, rankingWeights });
   } catch (error) {
