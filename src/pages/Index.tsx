@@ -975,6 +975,33 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
   const [sweetSavory, setSweetSavory] = useState(3);
   const [flavorIntensity, setFlavorIntensity] = useState(4);
   const [saving, setSaving] = useState(false);
+  const [captionSuggestion, setCaptionSuggestion] = useState("");
+  const [captionStatus, setCaptionStatus] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+
+  useEffect(() => {
+    if (!sessionUser || !isUuid(item.id) || review.trim()) return;
+    let cancelled = false;
+    const cleanTags = tags.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+    const timer = window.setTimeout(async () => {
+      setCaptionStatus("loading");
+      const body = { type: "suggest_caption", dishId: item.id, rating, tags: cleanTags, metrics: { wouldOrderAgain, temperature, spiciness, sweetSavory, flavorIntensity } };
+      const { data, error } = await supabase.functions.invoke("dish-interaction", { body }).catch((error) => ({ data: { error: error instanceof Error ? error.message : "Caption unavailable." }, error: null }));
+      if (cancelled) return;
+      if (error || data?.error) { setCaptionStatus("failed"); return; }
+      if (data?.suggestion?.caption) { setCaptionSuggestion(data.suggestion.caption); setCaptionStatus("ready"); return; }
+      const suggestionId = data?.suggestion?.id;
+      if (!suggestionId) { setCaptionStatus("failed"); return; }
+      for (let attempt = 0; attempt < 5 && !cancelled; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+        const { data: row } = await (supabase as any).from("review_caption_suggestions").select("caption,status").eq("id", suggestionId).maybeSingle();
+        if (cancelled) return;
+        if (row?.caption) { setCaptionSuggestion(row.caption); setCaptionStatus("ready"); return; }
+        if (row?.status && row.status !== "pending") break;
+      }
+      setCaptionStatus("failed");
+    }, 450);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [sessionUser, item.id, rating, tags, wouldOrderAgain, temperature, spiciness, sweetSavory, flavorIntensity, review]);
 
   const publishReview = async (event: FormEvent) => {
     event.preventDefault();
@@ -995,7 +1022,7 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
     onPublished();
   };
 
-  return <section id="review-menu-item" className="max-w-full overflow-hidden rounded-3xl glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-3xl font-black">Rate it</h2><span className="rounded-full bg-primary px-3 py-1 text-sm font-black text-primary-foreground">{rating}★</span></div><form onSubmit={publishReview} className="space-y-4"><EmotionalRating value={rating} onChange={setRating} loved={wouldOrderAgain} onLovedChange={setWouldOrderAgain} wantToTry={wantToTry} onWantToTryChange={setWantToTry} /><button type="button" onClick={() => setDetailsOpen((open) => !open)} className="mx-auto flex h-11 items-center justify-center rounded-full bg-secondary/80 px-5 text-sm font-black transition active:scale-95">{detailsOpen ? "Hide details" : "Add details"}</button>{detailsOpen && <div className="space-y-3 animate-fade-in"><div className="grid gap-3 md:grid-cols-2"><QuickScale label="Temp" low="cold" high="hot" value={temperature} onChange={setTemperature} /><QuickScale label="Spice" low="none" high="fire" value={spiciness} onChange={setSpiciness} min={0} /><QuickScale label="Sweet ↔ savory" low="sweet" high="savory" value={sweetSavory} onChange={setSweetSavory} /><QuickScale label="Flavor" low="subtle" high="bold" value={flavorIntensity} onChange={setFlavorIntensity} /></div><Input className="h-12 rounded-full bg-secondary/80" type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Price optional" /><Textarea className="rounded-2xl bg-secondary/80" value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`Optional note about ${item.name}`} /><Input className="h-12 rounded-full bg-secondary/80" value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy" /></div>}<Button type="submit" className="h-12 rounded-full" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit</Button></form></section>;
+  return <section id="review-menu-item" className="max-w-full overflow-hidden rounded-3xl glass-surface p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-display text-3xl font-black">Rate it</h2><span className="rounded-full bg-primary px-3 py-1 text-sm font-black text-primary-foreground">{rating}★</span></div><form onSubmit={publishReview} className="space-y-4"><EmotionalRating value={rating} onChange={setRating} loved={wouldOrderAgain} onLovedChange={setWouldOrderAgain} wantToTry={wantToTry} onWantToTryChange={setWantToTry} />{captionStatus !== "idle" && !review.trim() && <div className="rounded-2xl border border-border/60 bg-secondary/70 p-3 text-sm font-semibold"><div className="mb-2 flex items-center gap-2 text-accent"><Sparkles className="size-4" />{captionStatus === "loading" ? "Drafting caption…" : captionStatus === "ready" ? "Caption suggestion" : "Caption optional"}</div>{captionStatus === "ready" ? <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><p className="text-foreground/85">{captionSuggestion}</p><Button type="button" size="sm" className="shrink-0 rounded-full" onClick={() => { setReview(captionSuggestion); setDetailsOpen(true); }}>Use</Button></div> : captionStatus === "failed" ? <p className="text-muted-foreground">Write your own note if you want.</p> : null}</div>}<button type="button" onClick={() => setDetailsOpen((open) => !open)} className="mx-auto flex h-11 items-center justify-center rounded-full bg-secondary/80 px-5 text-sm font-black transition active:scale-95">{detailsOpen ? "Hide details" : "Add details"}</button>{detailsOpen && <div className="space-y-3 animate-fade-in"><div className="grid gap-3 md:grid-cols-2"><QuickScale label="Temp" low="cold" high="hot" value={temperature} onChange={setTemperature} /><QuickScale label="Spice" low="none" high="fire" value={spiciness} onChange={setSpiciness} min={0} /><QuickScale label="Sweet ↔ savory" low="sweet" high="savory" value={sweetSavory} onChange={setSweetSavory} /><QuickScale label="Flavor" low="subtle" high="bold" value={flavorIntensity} onChange={setFlavorIntensity} /></div><Input className="h-12 rounded-full bg-secondary/80" type="number" min="0" max="10000" step="0.01" value={pricePaid} onChange={(event) => setPricePaid(event.target.value)} placeholder="Price optional" /><Textarea className="rounded-2xl bg-secondary/80" value={review} onChange={(event) => setReview(event.target.value)} maxLength={1200} placeholder={`Optional note about ${item.name}`} /><Input className="h-12 rounded-full bg-secondary/80" value={tags} onChange={(event) => setTags(event.target.value)} maxLength={140} placeholder="Tags: crispy, spicy" /></div>}<Button type="submit" className="h-12 rounded-full" disabled={saving}>{saving ? <Loader2 className="animate-spin" /> : <Star />}Submit</Button></form></section>;
 };
 
 const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }) => {

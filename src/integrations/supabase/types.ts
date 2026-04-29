@@ -1614,6 +1614,66 @@ export type Database = {
           },
         ]
       }
+      review_caption_suggestions: {
+        Row: {
+          caption: string | null
+          created_at: string
+          dish_id: string
+          error: string | null
+          generated_from: Json
+          id: string
+          input_hash: string
+          model: string | null
+          rating_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          dish_id: string
+          error?: string | null
+          generated_from?: Json
+          id?: string
+          input_hash: string
+          model?: string | null
+          rating_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          dish_id?: string
+          error?: string | null
+          generated_from?: Json
+          id?: string
+          input_hash?: string
+          model?: string | null
+          rating_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_caption_suggestions_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_caption_suggestions_rating_id_fkey"
+            columns: ["rating_id"]
+            isOneToOne: false
+            referencedRelation: "ratings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reviews: {
         Row: {
           body: string | null
