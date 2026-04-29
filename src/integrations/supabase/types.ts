@@ -116,6 +116,51 @@ export type Database = {
         }
         Relationships: []
       }
+      dish_sponsorships: {
+        Row: {
+          boost_score: number
+          created_at: string
+          dish_id: string
+          ends_at: string | null
+          id: string
+          is_active: boolean
+          label: string
+          sponsor_name: string | null
+          starts_at: string
+          target_city: string | null
+          target_cuisine: string | null
+          updated_at: string
+        }
+        Insert: {
+          boost_score?: number
+          created_at?: string
+          dish_id: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          sponsor_name?: string | null
+          starts_at?: string
+          target_city?: string | null
+          target_cuisine?: string | null
+          updated_at?: string
+        }
+        Update: {
+          boost_score?: number
+          created_at?: string
+          dish_id?: string
+          ends_at?: string | null
+          id?: string
+          is_active?: boolean
+          label?: string
+          sponsor_name?: string | null
+          starts_at?: string
+          target_city?: string | null
+          target_cuisine?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dish_tags: {
         Row: {
           created_at: string
