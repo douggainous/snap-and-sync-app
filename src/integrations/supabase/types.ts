@@ -172,29 +172,39 @@ export type Database = {
       favorite_list_items: {
         Row: {
           created_at: string
+          dish_id: string | null
           id: string
           list_id: string
-          menu_item_id: string
+          menu_item_id: string | null
           note: string | null
           sort_order: number
         }
         Insert: {
           created_at?: string
+          dish_id?: string | null
           id?: string
           list_id: string
-          menu_item_id: string
+          menu_item_id?: string | null
           note?: string | null
           sort_order?: number
         }
         Update: {
           created_at?: string
+          dish_id?: string | null
           id?: string
           list_id?: string
-          menu_item_id?: string
+          menu_item_id?: string | null
           note?: string | null
           sort_order?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "favorite_list_items_dish_id_fkey"
+            columns: ["dish_id"]
+            isOneToOne: false
+            referencedRelation: "dishes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "favorite_list_items_list_id_fkey"
             columns: ["list_id"]
@@ -245,7 +255,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "favorite_lists_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       follows: {
         Row: {
@@ -690,6 +708,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "photos_review_id_fkey"
+            columns: ["review_id"]
+            isOneToOne: false
+            referencedRelation: "reviews"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "photos_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -967,6 +992,13 @@ export type Database = {
           website_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "restaurants_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "restaurants_created_by_users_fk"
             columns: ["created_by"]
