@@ -530,10 +530,15 @@ const Index = () => {
     setPhotoPreviews((current) => [...current, ...previews].slice(0, 6));
   };
 
-  const chooseReviewPhotos = (event: ChangeEvent<HTMLInputElement>) => {
+  const chooseReviewPhotos = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith("image/"));
-    if (!files.length) return;
-    addReviewPhotos(files, files.map((file) => URL.createObjectURL(file)));
+    if (!files.length) { event.target.value = ""; return; }
+    try {
+      const compatibleFiles = await Promise.all(files.map(convertHeicFile));
+      addReviewPhotos(compatibleFiles, compatibleFiles.map((file) => URL.createObjectURL(file)));
+    } catch {
+      toast({ title: "Photo format not supported", description: "Convert HEIC/HEIF photos to JPEG or choose another image.", variant: "destructive" });
+    }
     event.target.value = "";
   };
 
