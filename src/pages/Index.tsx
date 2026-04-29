@@ -343,7 +343,7 @@ const Index = () => {
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
 
-  const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
+  const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
 
@@ -773,15 +773,11 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   const webUrl = websiteHref(item.restaurants?.website_url);
   const mailUrl = emailHref(item.restaurants?.email);
   const shareItem = async () => {
-    const url = menuItemUrl(item.slug);
-    if (navigator.share) await navigator.share({ title: `${item.name} at ${item.restaurants?.name}`, text: `${item.aggregate_rating}★ ${item.name} · ${formatPrice(item)}`, url });
-    else await navigator.clipboard.writeText(url);
-    void supabase.functions.invoke("dish-interaction", { body: { type: "share", dishId: item.id, channel: navigator.share ? "native" : "clipboard" } });
+    await shareDishLink(item, "native");
   };
   const copyLink = async () => {
-    await navigator.clipboard.writeText(menuItemUrl(item.slug));
+    await shareDishLink(item, "copy_link");
     toast({ title: "Dish link copied" });
-    void supabase.functions.invoke("dish-interaction", { body: { type: "share", dishId: item.id, channel: "copy_link" } });
   };
   const trendLabels = item.trend_labels ?? [];
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
@@ -798,6 +794,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
           <div className="min-w-0"><h1 className="break-words font-display text-4xl font-black leading-[0.92] sm:text-5xl md:text-7xl">{item.name}</h1>{item.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/75">{item.description}</p>}</div>
           <div className="flex min-w-0 flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="font-display text-4xl font-black text-accent sm:text-5xl">{item.aggregate_rating.toFixed(1)}<span className="text-2xl">★</span></p><p className="text-xs font-bold text-foreground/70">{item.review_count} reviews · {formatPrice(item)}</p></div><div className="flex gap-2"><button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={() => onDishAction(item, "favorite", !item.user_favorite)} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button><button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button></div></div>
           <Button className="h-12 w-full rounded-full" onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Rate this dish</Button>
+          {!sessionUser && <Button className="h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Sign in to save this dish.")}><Bookmark />Save for later</Button>}
         </div>
       </div>
       <div className="max-w-full space-y-4"><div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} /><div className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">Place</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{[item.restaurants?.address, item.restaurants?.city, miles ? `${miles.toFixed(1)} mi` : null].filter(Boolean).join(" · ")}</p><div className="mt-3 grid gap-2"><Button className="w-full rounded-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button><Button className="w-full rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{callUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div></div></div></div>
