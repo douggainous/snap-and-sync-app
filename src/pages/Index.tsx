@@ -42,6 +42,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils";
 
 type View = "discover" | "scan" | "favorites" | "profile";
 type FeedMode = "trending" | "nearby" | "recent";
+type SearchSort = "relevance" | "trending" | "rating" | "nearby" | "recent";
 type UserSession = AppUser | null;
 type Restaurant = {
   id?: string;
@@ -309,6 +311,9 @@ const Index = () => {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [feedMode, setFeedMode] = useState<FeedMode>("trending");
+  const [searchSort, setSearchSort] = useState<SearchSort>(searchParams.get("sort") as SearchSort || "relevance");
+  const [cuisineFilter, setCuisineFilter] = useState(searchParams.get("cuisine") ?? "all");
+  const [minRating, setMinRating] = useState(searchParams.get("rating") ?? "0");
   const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -371,10 +376,17 @@ const Index = () => {
     if (append) setLoadingMore(true);
     else setLoading(true);
 
-    const { data, error } = await supabase.functions.invoke("dish-feed", {
+    const cleanTerm = sanitizePostgrestSearch(term);
+    const useSearchEndpoint = Boolean(cleanTerm || cuisineFilter !== "all" || minRating !== "0" || searchSort !== "relevance");
+    const sort = searchSort === "relevance" ? (mode === "nearby" ? "nearby" : mode === "recent" ? "recent" : "trending") : searchSort;
+
+    const { data, error } = await supabase.functions.invoke(useSearchEndpoint ? "dish-search" : "dish-feed", {
       body: {
         mode,
-        query: sanitizePostgrestSearch(term),
+        query: cleanTerm,
+        sort,
+        cuisine: cuisineFilter === "all" ? null : cuisineFilter,
+        minRating: Number(minRating),
         limit: DISCOVERY_PAGE_SIZE,
         offset,
         latitude: locationPoint?.latitude ?? null,
