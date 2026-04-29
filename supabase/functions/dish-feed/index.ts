@@ -91,6 +91,9 @@ type RecentEngagement = {
 type UserSignals = {
   preferredCuisines: Set<string>;
   cuisineRatings: Map<string, { total: number; count: number }>;
+  savedCuisines: Map<string, number>;
+  affinityTags: Map<string, number>;
+  savedDishIds: Set<string>;
 };
 
 type TrendMetric = {
@@ -140,7 +143,7 @@ function ageDays(date?: string | null) {
   return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
 }
 
-function scoreDish(dish: DishRow, recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS) {
+function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS) {
   const rating = Number(dish.aggregate_rating ?? 0);
   const ratingCount = Number(dish.rating_count ?? 0);
   const engagementTotal = Number(dish.want_to_try_count ?? 0) + Number(dish.favorite_count ?? 0) + Number(dish.save_count ?? 0) + Number(dish.like_count ?? 0) + Number(dish.review_count ?? 0) + Number(dish.photo_count ?? 0);
@@ -153,7 +156,10 @@ function scoreDish(dish: DishRow, recent: RecentEngagement, userSignals: UserSig
   const cuisineHistory = cuisine ? userSignals.cuisineRatings.get(cuisine) : undefined;
   const cuisineAffinity = cuisineHistory ? clamp(((cuisineHistory.total / cuisineHistory.count) / 5) * 80 + Math.min(20, cuisineHistory.count * 4)) : 0;
   const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 28 : 0;
-  const personalizationScore = clamp(cuisineAffinity + statedPreference);
+  const savedCuisineAffinity = cuisine ? Math.min(28, (userSignals.savedCuisines.get(cuisine) ?? 0) * 7) : 0;
+  const tagAffinity = Math.min(34, dishTags.reduce((sum, tag) => sum + (userSignals.affinityTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 5);
+  const alreadySavedPenalty = userSignals.savedDishIds.has(dish.id) ? -12 : 0;
+  const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + alreadySavedPenalty);
   const score = qualityScore * weights.quality + popularityScore * weights.popularity + trendingScore * weights.trending + personalizationScore * weights.personalization;
   return { score, qualityScore, popularityScore, trendingScore, personalizationScore };
 }
