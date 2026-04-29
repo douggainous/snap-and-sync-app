@@ -8,6 +8,15 @@ const corsHeaders = {
 };
 
 const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+const VELOCITY_WINDOW_DAYS = 14;
+const LOW_QUALITY_RATING_FLOOR = 3.2;
+const STALE_DAYS = 180;
+const DEFAULT_WEIGHTS = {
+  quality: 0.38,
+  popularity: 0.27,
+  trending: 0.22,
+  personalization: 0.13,
+};
 
 const BodySchema = z.object({
   mode: z.enum(["trending", "nearby", "recent"]).default("trending"),
@@ -17,6 +26,12 @@ const BodySchema = z.object({
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
   radiusMiles: z.number().min(1).max(250).default(50),
+  rankingWeights: z.object({
+    quality: z.number().min(0).max(1).optional(),
+    popularity: z.number().min(0).max(1).optional(),
+    trending: z.number().min(0).max(1).optional(),
+    personalization: z.number().min(0).max(1).optional(),
+  }).optional().default({}),
 });
 
 type Restaurant = {
@@ -63,6 +78,19 @@ type DishRow = {
   trending_score: number;
   created_at: string;
   cover_photo_id?: string | null;
+};
+
+type RecentEngagement = {
+  ratings: number;
+  wantToTry: number;
+  favorites: number;
+  saves: number;
+  lastEventAt?: string | null;
+};
+
+type UserSignals = {
+  preferredCuisines: Set<string>;
+  cuisineRatings: Map<string, { total: number; count: number }>;
 };
 
 function json(data: unknown, status = 200) {
