@@ -111,15 +111,37 @@ function recencyBoost(createdAt: string) {
   return Math.max(0, 30 - ageDays) * 1.5;
 }
 
-function engagementScore(dish: DishRow) {
-  return Number(dish.aggregate_rating ?? 0) * 20
-    + Number(dish.rating_count ?? 0) * 3
-    + Number(dish.review_count ?? 0) * 4
-    + Number(dish.photo_count ?? 0) * 3
-    + Number(dish.want_to_try_count ?? 0) * 2
-    + Number(dish.favorite_count ?? 0) * 3
-    + Number(dish.save_count ?? 0)
-    + recencyBoost(dish.created_at);
+function clamp(value: number, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeWeights(input: Partial<typeof DEFAULT_WEIGHTS>) {
+  const raw = { ...DEFAULT_WEIGHTS, ...input };
+  const total = Object.values(raw).reduce((sum, value) => sum + Number(value || 0), 0) || 1;
+  return Object.fromEntries(Object.entries(raw).map(([key, value]) => [key, Number(value || 0) / total])) as typeof DEFAULT_WEIGHTS;
+}
+
+function ageDays(date?: string | null) {
+  if (!date) return Number.POSITIVE_INFINITY;
+  return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
+}
+
+function scoreDish(dish: DishRow, recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS) {
+  const rating = Number(dish.aggregate_rating ?? 0);
+  const ratingCount = Number(dish.rating_count ?? 0);
+  const engagementTotal = Number(dish.want_to_try_count ?? 0) + Number(dish.favorite_count ?? 0) + Number(dish.save_count ?? 0) + Number(dish.like_count ?? 0) + Number(dish.review_count ?? 0) + Number(dish.photo_count ?? 0);
+  const qualityScore = clamp((rating / 5) * 78 + Math.min(22, Math.log1p(ratingCount) * 7));
+  const popularityScore = clamp(Math.log1p(engagementTotal * 1.2 + ratingCount * 1.5 + Number(dish.favorite_count ?? 0) * 2 + Number(dish.want_to_try_count ?? 0) * 1.7) * 16);
+  const velocityEvents = recent.ratings * 2.4 + recent.favorites * 2.8 + recent.wantToTry * 2.1 + recent.saves * 1.2;
+  const velocityFreshness = Math.max(0, 1 - ageDays(recent.lastEventAt) / VELOCITY_WINDOW_DAYS);
+  const trendingScore = clamp(Math.log1p(velocityEvents) * 26 * (0.65 + velocityFreshness * 0.35) + recencyBoost(dish.created_at) * 0.45);
+  const cuisine = dish.cuisine?.toLowerCase().trim() ?? "";
+  const cuisineHistory = cuisine ? userSignals.cuisineRatings.get(cuisine) : undefined;
+  const cuisineAffinity = cuisineHistory ? clamp(((cuisineHistory.total / cuisineHistory.count) / 5) * 80 + Math.min(20, cuisineHistory.count * 4)) : 0;
+  const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 28 : 0;
+  const personalizationScore = clamp(cuisineAffinity + statedPreference);
+  const score = qualityScore * weights.quality + popularityScore * weights.popularity + trendingScore * weights.trending + personalizationScore * weights.personalization;
+  return { score, qualityScore, popularityScore, trendingScore, personalizationScore };
 }
 
 serve(async (req) => {
