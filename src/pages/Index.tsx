@@ -319,6 +319,7 @@ const Index = () => {
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const feedRequestRef = useRef(0);
   const itemsLengthRef = useRef(0);
+  const guestFeedPromptShownRef = useRef(false);
   const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
@@ -342,6 +343,7 @@ const Index = () => {
   const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
+  const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
@@ -488,6 +490,20 @@ const Index = () => {
     observer.observe(node);
     return () => observer.disconnect();
   }, [view, selectedItem, listSlug, hasMoreItems, loading, loadingMore, query, items.length, feedMode, userLocation]);
+
+  useEffect(() => {
+    if (sessionUser || selectedSlug || listSlug || view !== "discover" || guestFeedPromptShownRef.current || items.length < 4) return;
+    const node = loadMoreRef.current;
+    if (!node) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries[0]?.isIntersecting || guestFeedPromptShownRef.current) return;
+      guestFeedPromptShownRef.current = true;
+      setAuthPrompt("Save dishes you want to try");
+      observer.disconnect();
+    }, { rootMargin: "120px 0px" });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [sessionUser, selectedSlug, listSlug, view, items.length]);
 
   useEffect(() => {
     if (!selectedSlug || selectedItem) return;
@@ -662,7 +678,7 @@ const Index = () => {
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
-      {authPrompt && <Suspense fallback={null}><AuthModal onClose={() => setAuthPrompt(null)} /></Suspense>}
+      {authPrompt && <Suspense fallback={null}><AuthModal prompt={authPrompt} onClose={() => setAuthPrompt(null)} /></Suspense>}
       {favoriteTarget && <SaveToCollectionModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 w-full max-w-full border-b border-border/50 bg-background/72 backdrop-blur-2xl">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
@@ -707,7 +723,7 @@ const Index = () => {
             </>
           )}
 
-          {selectedItem && !listSlug && <ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />}
+          {selectedItem && !listSlug && <><ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />{!sessionUser && !sharedDishNudgeDismissed && <GuestConversionNudge onClose={() => setSharedDishNudgeDismissed(true)} onSignIn={() => setAuthPrompt("Track your favorite meals")} />}</>}
 
           {view === "scan" && (
             <section className="-mx-3 space-y-3 overflow-hidden md:mx-0">
@@ -794,7 +810,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
           <div className="min-w-0"><h1 className="break-words font-display text-4xl font-black leading-[0.92] sm:text-5xl md:text-7xl">{item.name}</h1>{item.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/75">{item.description}</p>}</div>
           <div className="flex min-w-0 flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="font-display text-4xl font-black text-accent sm:text-5xl">{item.aggregate_rating.toFixed(1)}<span className="text-2xl">★</span></p><p className="text-xs font-bold text-foreground/70">{item.review_count} reviews · {formatPrice(item)}</p></div><div className="flex gap-2"><button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={() => onDishAction(item, "favorite", !item.user_favorite)} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button><button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button></div></div>
           <Button className="h-12 w-full rounded-full" onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Rate this dish</Button>
-          {!sessionUser && <Button className="h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Sign in to save this dish.")}><Bookmark />Save for later</Button>}
+          {!sessionUser && <Button className="h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Save dishes you want to try") }><Bookmark />Save for later</Button>}
         </div>
       </div>
       <div className="max-w-full space-y-4"><div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} /><div className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">Place</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-muted-foreground">{[item.restaurants?.address, item.restaurants?.city, miles ? `${miles.toFixed(1)} mi` : null].filter(Boolean).join(" · ")}</p><div className="mt-3 grid gap-2"><Button className="w-full rounded-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button><Button className="w-full rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{callUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div></div></div></div>
@@ -808,6 +824,8 @@ const RelatedDishes = ({ tags, currentName }: { tags: string[]; currentName: str
   const suggestions = tags.length ? tags : [currentName];
   return <section className="max-w-full overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">You might also like</h2><div className="mt-3 grid w-full max-w-full min-w-0 grid-cols-1 gap-2 lg:grid-cols-1">{suggestions.map((tag) => <a key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="block w-full min-w-0 max-w-full overflow-hidden rounded-2xl bg-secondary/70 p-3 transition active:scale-95"><p className="text-sm font-black line-clamp-1">{tag}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Explore dishes</p></a>)}</div></section>;
 };
+
+const GuestConversionNudge = ({ onClose, onSignIn }: { onClose: () => void; onSignIn: () => void }) => <div className="fixed inset-x-3 bottom-20 z-20 mx-auto max-w-md rounded-lg border bg-card p-4 shadow-[var(--shadow-editorial)] lg:bottom-6"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-display text-xl font-black">Keep this dish handy</p><p className="mt-1 text-sm font-bold text-muted-foreground">Save dishes you want to try and track your favorite meals.</p></div><Button size="icon" variant="ghost" className="shrink-0" onClick={onClose} aria-label="Dismiss"><X className="size-4" /></Button></div><div className="mt-3 flex gap-2"><Button className="flex-1 rounded-full" onClick={onSignIn}><Bookmark className="size-4" />Save later</Button><Button variant="outline" className="rounded-full" onClick={onClose}>Not now</Button></div></div>;
 
 const FeedErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => <section className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-accent" /><h2 className="font-display text-2xl font-black">Could not load dishes</h2><p className="mt-1 text-sm font-semibold text-muted-foreground">{message}</p><Button className="mt-4 rounded-full" onClick={onRetry}>Retry</Button></section>;
 
