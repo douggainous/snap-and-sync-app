@@ -57,7 +57,7 @@ type PlannedDish = Dish & {
   cover_image_url?: string | null;
   distance_miles?: number | null;
   location_group: string;
-  plan_group: "Plan to visit" | "Nearby" | "Saved for later";
+  plan_group: "Near you now" | "Plan to visit" | "Nearby" | "Saved for later";
 };
 
 function json(data: unknown, status = 200) {
@@ -156,15 +156,21 @@ serve(async (req) => {
       if (photoError) console.error("want-to-try photo lookup failed", photoError);
 
       const photoRows = (photos ?? []) as { dish_id: string; image_url?: string | null; storage_path?: string | null; storage_bucket?: string | null }[];
-      const signedPaths = photoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!);
+      const firstPhotoRows: typeof photoRows = [];
+      const seenPhotoDishIds = new Set<string>();
+      for (const photo of photoRows) {
+        if (seenPhotoDishIds.has(photo.dish_id)) continue;
+        seenPhotoDishIds.add(photo.dish_id);
+        firstPhotoRows.push(photo);
+      }
+      const signedPaths = firstPhotoRows.filter((photo) => photo.storage_bucket === "dish-photos" && photo.storage_path).map((photo) => photo.storage_path!);
       const signedUrlByPath = new Map<string, string>();
       if (signedPaths.length) {
         const signed = await supabase.storage.from("dish-photos").createSignedUrls(signedPaths, IMAGE_SIGNED_URL_TTL_SECONDS);
         for (const item of signed.data ?? []) if (item.path && item.signedUrl) signedUrlByPath.set(item.path, item.signedUrl);
       }
 
-      for (const photo of photoRows) {
-        if (photosByDishId.has(photo.dish_id)) continue;
+      for (const photo of firstPhotoRows) {
         const imageUrl = photo.storage_path ? signedUrlByPath.get(photo.storage_path) ?? photo.image_url : photo.image_url;
         if (imageUrl) photosByDishId.set(photo.dish_id, imageUrl);
       }
@@ -177,8 +183,8 @@ serve(async (req) => {
         const distance = distanceMiles(origin, dish.restaurants);
         const restaurant = dish.restaurants;
         const city = restaurant?.city?.trim();
-        const locationGroup = city || restaurant?.name?.trim() || "Location pending";
-        const planGroup = distance == null ? "Saved for later" : distance <= 5 ? "Plan to visit" : "Nearby";
+        const planGroup = distance == null ? "Saved for later" : distance <= 2 ? "Near you now" : distance <= 10 ? "Plan to visit" : "Nearby";
+        const locationGroup = origin ? planGroup : city || restaurant?.name?.trim() || "Location pending";
         return {
           ...dish,
           saved_at: row.updated_at ?? row.created_at ?? null,
@@ -202,9 +208,9 @@ serve(async (req) => {
       groups: groupBy(sorted, (dish) => dish.location_group),
       plan_groups: groupBy(sorted, (dish) => dish.plan_group),
       calculation: {
-        sort: origin ? "distance_miles asc, saved_at desc" : "saved_at desc with location groups retained",
-        location_group: "restaurant city, otherwise restaurant name, otherwise Location pending",
-        plan_group: "≤5 miles = Plan to visit, farther with coordinates = Nearby, missing coordinates = Saved for later",
+        sort: origin ? "distance_miles asc, saved_at desc" : "saved_at desc with city groups retained",
+        location_group: "with location: proximity group; without location: restaurant city, restaurant name, or Location pending",
+        plan_group: "≤2 miles = Near you now, ≤10 miles = Plan to visit, farther = Nearby, missing coordinates = Saved for later",
       },
     });
   } catch (error) {
