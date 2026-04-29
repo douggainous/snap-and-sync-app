@@ -289,7 +289,7 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
         <div className="pointer-events-none mt-2 flex items-center gap-2 text-xs font-bold text-foreground/78"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span></div>
       </div>
       <div className="absolute bottom-6 right-3 z-10 flex flex-col gap-3">
-        <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onSave(item); }} aria-label="Save dish"><Heart className="size-5" /></button>
+        <button type="button" className={cn("thumb-action", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button>
         <button type="button" className={cn("thumb-action", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
         <a className="thumb-action" href={`/items/${item.slug}`} aria-label="View dish details"><Eye className="size-5" /></a>
         {item.review_count === 0 && <button type="button" className="thumb-action" onClick={(event) => { event.preventDefault(); onFirstReview?.(item); }} aria-label="Review first"><Star className="size-5" /></button>}
