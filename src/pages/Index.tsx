@@ -952,7 +952,7 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     setSaving(false);
     if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const aiSuggestion = data?.aiSuggestion;
-    toast({ title: aiSuggestion?.dishName ? `AI suggests: ${aiSuggestion.dishName}` : "Dish saved", description: aiSuggestion?.status === "completed" ? `Tags: ${(aiSuggestion.tags ?? []).join(", ") || "none"}` : aiSuggestion?.error ?? "Your photo, dish, rating, and review are stored." });
+    toast({ title: aiSuggestion?.status === "completed" && aiSuggestion?.dishName ? `AI suggests: ${aiSuggestion.dishName}` : "Dish saved", description: aiSuggestion?.status === "completed" ? `Confidence: ${aiSuggestion.confidenceLevel ?? "medium"} · Tags: ${(aiSuggestion.tags ?? []).join(", ") || "none"}` : aiSuggestion?.error ?? "AI recognition is queued; your dish is already saved." });
     setReview(""); setPricePaid(""); setTags(""); onPublished();
   };
 

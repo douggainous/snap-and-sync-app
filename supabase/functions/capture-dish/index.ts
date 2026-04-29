@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const IMAGE_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
 const BodySchema = z.object({
   dishName: z.string().trim().min(2).max(120),
@@ -38,37 +39,43 @@ function json(data: unknown, status = 200) {
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "dish";
 const extFor = (mimeType: string) => mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : mimeType === "image/heic" ? "heic" : mimeType === "image/heif" ? "heif" : "jpg";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+const confidenceLevel = (confidence?: number | null) => confidence != null && confidence >= 0.82 ? "high" : confidence != null && confidence >= 0.55 ? "medium" : "low";
+const sha256Hex = async (bytes: Uint8Array) => {
+  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buffer))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
 
 async function recognizeDish(imageBase64: string, mimeType: string, context: { dishName: string; restaurantName?: string | null }) {
   const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!lovableApiKey) return { status: "failed", dishName: null, tags: [], confidence: null, error: "Lovable AI is not configured." };
+  if (!lovableApiKey) return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "Lovable AI is not configured." };
 
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "google/gemini-2.5-pro",
+        model: "google/gemini-3-flash-preview",
       messages: [
-        { role: "system", content: "Recognize the primary prepared food dish in the image. Return only tool output. Be conservative: if uncertain, use the user's typed dish as a hint and lower confidence. Tags should describe cuisine, ingredients, dietary style, preparation, flavor, and course." },
+          { role: "system", content: "Recognize the primary prepared food dish in the image. Return only tool output. Be conservative: if uncertain, lower confidence. Include cuisine and ingredients only when visually supported. Tags should be short and useful for discovery." },
         { role: "user", content: [{ type: "text", text: `Identify this dish. User context: ${JSON.stringify(context)}` }, { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } }] },
       ],
-      tools: [{ type: "function", function: { name: "recognize_dish", description: "Return dish recognition suggestions for a food photo.", parameters: { type: "object", properties: { dishName: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 8 }, confidence: { type: "number", minimum: 0, maximum: 1 } }, required: ["dishName", "tags", "confidence"], additionalProperties: false } } }],
+        tools: [{ type: "function", function: { name: "recognize_dish", description: "Return dish recognition suggestions for a food photo.", parameters: { type: "object", properties: { dishName: { type: "string" }, cuisine: { type: "string" }, tags: { type: "array", items: { type: "string" }, maxItems: 8 }, ingredients: { type: "array", items: { type: "string" }, maxItems: 8 }, confidence: { type: "number", minimum: 0, maximum: 1 } }, required: ["dishName", "cuisine", "tags", "ingredients", "confidence"], additionalProperties: false } } }],
       tool_choice: { type: "function", function: { name: "recognize_dish" } },
     }),
   });
 
   if (!response.ok) {
-    if (response.status === 429) return { status: "rate_limited", dishName: null, tags: [], confidence: null, error: "AI rate limit reached. Dish was saved without AI suggestions." };
-    if (response.status === 402) return { status: "payment_required", dishName: null, tags: [], confidence: null, error: "AI credits are exhausted. Dish was saved without AI suggestions." };
+    if (response.status === 429) return { status: "rate_limited", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI rate limit reached. Dish was saved without AI suggestions." };
+    if (response.status === 402) return { status: "payment_required", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI credits are exhausted. Dish was saved without AI suggestions." };
     console.error("Lovable AI dish recognition failed", response.status, await response.text());
-    return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI recognition failed. Dish was saved without AI suggestions." };
+    return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI recognition failed. Dish was saved without AI suggestions." };
   }
 
   const data = await response.json();
   const toolArgs = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-  if (!toolArgs) return { status: "failed", dishName: null, tags: [], confidence: null, error: "AI returned no dish suggestion." };
-  const parsed = JSON.parse(toolArgs) as { dishName?: string; tags?: string[]; confidence?: number };
-  return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence: typeof parsed.confidence === "number" ? parsed.confidence : null, error: null };
+  if (!toolArgs) return { status: "failed", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, confidenceLevel: "low", rawResult: {}, error: "AI returned no dish suggestion." };
+  const parsed = JSON.parse(toolArgs) as { dishName?: string; cuisine?: string; tags?: string[]; ingredients?: string[]; confidence?: number };
+  const confidence = typeof parsed.confidence === "number" ? parsed.confidence : null;
+  return { status: "completed", dishName: parsed.dishName?.trim().slice(0, 120) || null, cuisine: parsed.cuisine?.trim().slice(0, 80) || null, tags: [...new Set((parsed.tags ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), ingredients: [...new Set((parsed.ingredients ?? []).map(cleanTag).filter(Boolean))].slice(0, 8), confidence, confidenceLevel: confidenceLevel(confidence), rawResult: parsed, error: null };
 }
 
 serve(async (req) => {
@@ -137,16 +144,18 @@ serve(async (req) => {
     }
 
     const images = input.images?.length ? input.images : [{ imageBase64: input.imageBase64!, mimeType: input.mimeType!, fileName: input.fileName }];
-    const ai = await recognizeDish(images[0].imageBase64, images[0].mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
     const photos = [];
+    let firstImageHash: string | null = null;
     for (const [index, image] of images.entries()) {
       const binary = Uint8Array.from(atob(image.imageBase64), (char) => char.charCodeAt(0));
       if (binary.byteLength > 8 * 1024 * 1024) return json({ error: "Each image must be 8MB or smaller." }, 413);
+      const imageHash = await sha256Hex(binary);
+      if (index === 0) firstImageHash = imageHash;
       const path = `${user.id}/dishes/${dish.id}/${Date.now()}-${index}-${slugify(image.fileName ?? input.dishName)}.${extFor(image.mimeType)}`;
       const upload = await supabase.storage.from("dish-photos").upload(path, binary, { contentType: image.mimeType, cacheControl: "31536000", upsert: false });
       if (upload.error) return json({ error: "Could not upload photo." }, 500);
       const signed = await supabase.storage.from("dish-photos").createSignedUrl(path, IMAGE_SIGNED_URL_TTL_SECONDS);
-      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, ai_dish_name: index === 0 ? ai.dishName : null, ai_tags: index === 0 ? ai.tags : [], ai_confidence: index === 0 ? ai.confidence : null, ai_status: index === 0 ? ai.status : "not_requested", ai_error: index === 0 ? ai.error : null }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error").single();
+      const { data: photo, error: photoError } = await supabase.from("photos").insert({ dish_id: dish.id, user_id: user.id, storage_bucket: "dish-photos", storage_path: path, image_url: signed.data?.signedUrl ?? null, alt_text: `${input.dishName} photo ${index + 1}`, is_public: true, image_hash: imageHash, ai_status: index === 0 ? "pending" : "not_requested" }).select("id,dish_id,storage_path,image_url,alt_text,created_at,ai_dish_name,ai_tags,ai_confidence,ai_status,ai_error,image_hash,ai_cuisine,ai_ingredients").single();
       if (photoError) {
         await supabase.storage.from("dish-photos").remove([path]);
         return json({ error: "Could not save photo record." }, 500);
@@ -155,6 +164,31 @@ serve(async (req) => {
     }
 
     await supabase.from("dishes").update({ cover_photo_id: photos[0]?.id ?? null }).eq("id", dish.id);
+
+    let cachedAi: { status: string; dish_name?: string | null; cuisine?: string | null; tags?: string[] | null; ingredients?: string[] | null; confidence?: number | null; confidence_level?: string | null; error?: string | null } | null = null;
+    if (firstImageHash && photos[0]) {
+      const { data: existing } = await supabase.from("dish_ai_recognitions").select("status,dish_name,cuisine,tags,ingredients,confidence,confidence_level,error").eq("image_hash", firstImageHash).maybeSingle();
+      if (existing?.status === "completed") {
+        cachedAi = existing;
+        await supabase.from("photos").update({ ai_dish_name: existing.dish_name ?? null, ai_cuisine: existing.cuisine ?? null, ai_tags: existing.tags ?? [], ai_ingredients: existing.ingredients ?? [], ai_confidence: existing.confidence ?? null, ai_status: "completed", ai_error: null }).eq("id", photos[0].id);
+      } else {
+        await supabase.from("dish_ai_recognitions").upsert({ user_id: user.id, dish_id: dish.id, photo_id: photos[0].id, image_hash: firstImageHash, status: "pending" }, { onConflict: "image_hash" });
+        EdgeRuntime.waitUntil((async () => {
+          const ai = await recognizeDish(images[0].imageBase64, images[0].mimeType, { dishName: input.dishName, restaurantName: input.restaurantName });
+          await supabase.from("dish_ai_recognitions").update({ status: ai.status, dish_name: ai.dishName, cuisine: ai.cuisine, tags: ai.tags, ingredients: ai.ingredients, confidence: ai.confidence, confidence_level: ai.confidenceLevel, raw_result: ai.rawResult, error: ai.error }).eq("image_hash", firstImageHash);
+          await supabase.from("photos").update({ ai_dish_name: ai.dishName, ai_cuisine: ai.cuisine, ai_tags: ai.tags, ai_ingredients: ai.ingredients, ai_confidence: ai.confidence, ai_status: ai.status, ai_error: ai.error }).eq("id", photos[0].id);
+          if (ai.status === "completed" && ai.confidenceLevel === "high") {
+            const allTags = [...new Set([...(input.tags ?? []), ...ai.tags].map(cleanTag).filter(Boolean))].slice(0, 8);
+            for (const tagName of allTags) {
+              const tagSlug = slugify(tagName);
+              const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
+              if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
+            }
+            await supabase.from("dishes").update({ cuisine: ai.cuisine ?? null }).eq("id", dish.id).is("cuisine", null);
+          }
+        })());
+      }
+    }
 
     let rating = null;
     let review = null;
@@ -188,14 +222,14 @@ serve(async (req) => {
       }
     }
 
-    const allTags = [...new Set([...input.tags, ...ai.tags].map(cleanTag).filter(Boolean))].slice(0, 8);
+    const allTags = [...new Set(input.tags.map(cleanTag).filter(Boolean))].slice(0, 8);
     for (const tagName of allTags) {
       const tagSlug = slugify(tagName);
       const { data: tag } = await supabase.from("tags").upsert({ name: tagName, slug: tagSlug }, { onConflict: "slug" }).select("id").single();
       if (tag?.id) await supabase.from("dish_tags").upsert({ dish_id: dish.id, tag_id: tag.id, created_by: user.id });
     }
 
-    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, aiSuggestion: { dishName: ai.dishName, tags: ai.tags, confidence: ai.confidence, status: ai.status, error: ai.error } });
+    return json({ dish, photo: photos[0] ?? null, photos, rating, review, url: photos[0]?.image_url ?? null, aiSuggestion: cachedAi ? { dishName: cachedAi.dish_name, cuisine: cachedAi.cuisine, tags: cachedAi.tags ?? [], ingredients: cachedAi.ingredients ?? [], confidence: cachedAi.confidence, confidenceLevel: cachedAi.confidence_level, status: cachedAi.status, error: cachedAi.error } : { status: "pending", confidenceLevel: "low", dishName: null, cuisine: null, tags: [], ingredients: [], confidence: null, error: null } });
   } catch (error) {
     console.error("capture-dish error", error);
     return json({ error: "Unexpected error." }, 500);
