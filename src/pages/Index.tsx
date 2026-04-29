@@ -948,45 +948,45 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   return <section className="max-w-full space-y-3 overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-3xl font-black">Reviews</h2>{rows.length ? rows.map((review) => <article key={review.id} className="max-w-full overflow-hidden rounded-2xl bg-secondary/55 p-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs font-bold text-muted-foreground sm:grid-cols-2 md:grid-cols-4"><span className="min-w-0 truncate">Temp {review.temperature_rating ?? "—"}/5</span><span className="min-w-0 truncate">Spice {review.spiciness_rating ?? "—"}/5</span><span className="min-w-0 truncate">Sweet {review.sweet_savory_rating ?? "—"}/5</span><span className="min-w-0 truncate">Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div>{review.review && <p className="mt-2 text-sm text-muted-foreground">{review.review}</p>}</article>) : <p className="text-sm font-semibold text-muted-foreground">No reviews yet.</p>}</section>;
 };
 
-const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
+const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
   const { toast } = useToast();
-  const [lists, setLists] = useState<FavoriteList[]>([]);
-  const [title, setTitle] = useState(`Best ${item.name}`.slice(0, 80));
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!sessionUser) return;
-    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+    (supabase as any).from("collections").select("id,name,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(20).then(({ data }: { data: Collection[] | null }) => setCollections(data ?? []));
   }, [sessionUser]);
 
-  const addToList = async (list: FavoriteList) => {
-    if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
-    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
-    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
-    if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
-    else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
+  const addToCollection = async (collection: Collection) => {
+    if (!sessionUser) return onProtected("Sign in to save dishes to collections.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved dish before adding it to a collection.", variant: "destructive" });
+    const { error } = await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+    if (error) toast({ title: "Could not save dish", description: error.message, variant: "destructive" });
+    else { toast({ title: "Saved to collection", description: collection.name }); onClose(); }
   };
 
-  const createList = async (event: FormEvent) => {
+  const createCollection = async (event: FormEvent) => {
     event.preventDefault();
-    if (!sessionUser) return onProtected("Sign in to create favorites lists.");
-    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before creating a list.", variant: "destructive" });
-    const parsed = listSchema.safeParse({ title, description, is_public: isPublic });
-    if (!parsed.success) return toast({ title: "Check your list", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    if (!sessionUser) return onProtected("Sign in to create collections.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved dish before creating a collection.", variant: "destructive" });
+    const parsed = collectionSchema.safeParse({ name, description, is_public: isPublic });
+    if (!parsed.success) return toast({ title: "Check your collection", description: parsed.error.issues[0]?.message, variant: "destructive" });
     setLoading(true);
-    const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
-    const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
-    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
+    const slug = `${slugify(parsed.data.name)}-${Date.now()}`;
+    const { data: collection, error } = await (supabase as any).from("collections").insert({ name: parsed.data.name, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,name,description,slug,is_public,cover_image_url").single();
+    if (!error && collection) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     setLoading(false);
-    if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
-    toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
+    if (error) return toast({ title: "Collection not created", description: error.message, variant: "destructive" });
+    toast({ title: "Collection created", description: `Saved to ${parsed.data.name}.` });
     onClose();
   };
 
-  if (!sessionUser) { onProtected("Sign in to save menu items to shareable favorites lists."); onClose(); return null; }
-  return <div className="fixed inset-0 z-50 flex items-end overflow-x-hidden bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)] md:max-w-lg"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Save menu item</p><h2 className="font-display text-3xl font-black">Add {item.name} to a list</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{lists.map((list) => <Button key={list.id} className="w-full justify-between" variant="outline" onClick={() => addToList(list)}><span>{list.title}</span><span className="text-xs">{list.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createList} className="mt-4 space-y-3 border-t pt-4"><Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} placeholder="List title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public shareable list</label><Button disabled={loading} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create list and save item</Button></form></div></div>;
+  if (!sessionUser) { onProtected("Sign in to save dishes to collections."); onClose(); return null; }
+  return <div className="fixed inset-0 z-50 flex items-end overflow-x-hidden bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)] md:max-w-lg"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Saved</p><h2 className="font-display text-3xl font-black">Add to collection</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{collections.map((collection) => <Button key={collection.id} className="w-full justify-between" variant="outline" onClick={() => addToCollection(collection)}><span className="truncate">{collection.name}</span><span className="text-xs">{collection.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createCollection} className="mt-4 space-y-3 border-t pt-4"><Input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="New collection" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description optional" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public collection</label><Button disabled={loading || !name.trim()} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create and add</Button></form></div></div>;
 };
 
 const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
