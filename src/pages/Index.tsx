@@ -128,6 +128,16 @@ type FavoriteList = {
 };
 type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
 type DishListItemInsert = { list_id: string; dish_id: string };
+type Collection = {
+  id: string;
+  name: string;
+  description?: string | null;
+  slug: string;
+  is_public: boolean;
+  cover_image_url?: string | null;
+  item_count?: number;
+};
+type CollectionPreview = Collection & { dishes: DashboardDish[] };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -142,6 +152,11 @@ const reviewSchema = z.object({
 });
 const listSchema = z.object({
   title: z.string().trim().min(2, "List title is required.").max(80, "Keep list titles under 80 characters."),
+  description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
+  is_public: z.boolean(),
+});
+const collectionSchema = z.object({
+  name: z.string().trim().min(1, "Collection name is required.").max(80, "Keep collection names under 80 characters."),
   description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
   is_public: z.boolean(),
 });
@@ -558,9 +573,14 @@ const Index = () => {
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
     const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
+    if (enabled) {
+      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "Saved", slug: "saved", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
+      if (collection?.id) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+    }
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
     toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Saved to want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? "Your dish interaction is stored." : "Your dish interaction was removed." });
+    if (enabled) setFavoriteTarget(item);
   };
 
   const startFirstReview = (item: MenuItem) => {
@@ -636,7 +656,7 @@ const Index = () => {
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
       {authPrompt && <Suspense fallback={null}><AuthModal onClose={() => setAuthPrompt(null)} /></Suspense>}
-      {favoriteTarget && <SaveToListModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
+      {favoriteTarget && <SaveToCollectionModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <header className="sticky top-0 z-30 w-full max-w-full border-b border-border/50 bg-background/72 backdrop-blur-2xl">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
           <a href="/" className="flex min-w-0 flex-1 items-center gap-2 font-display text-lg font-black sm:text-xl md:flex-none"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"><ChefHat className="size-5" /></span><span className="truncate">PlateLoop</span></a>
@@ -928,45 +948,45 @@ const ReviewFeed = ({ item, refreshKey }: { item: MenuItem; refreshKey: number }
   return <section className="max-w-full space-y-3 overflow-hidden rounded-3xl glass-surface p-4"><h2 className="font-display text-3xl font-black">Reviews</h2>{rows.length ? rows.map((review) => <article key={review.id} className="max-w-full overflow-hidden rounded-2xl bg-secondary/55 p-3"><p className="font-bold"><span className="text-accent">{"★".repeat(Math.round(review.rating))}</span> {review.would_order_again ? "· would order again" : ""}</p>{review.price_paid ? <p className="text-xs font-bold text-accent">Paid ${review.price_paid} {review.currency}</p> : null}<div className="mt-2 grid min-w-0 grid-cols-1 gap-2 text-xs font-bold text-muted-foreground sm:grid-cols-2 md:grid-cols-4"><span className="min-w-0 truncate">Temp {review.temperature_rating ?? "—"}/5</span><span className="min-w-0 truncate">Spice {review.spiciness_rating ?? "—"}/5</span><span className="min-w-0 truncate">Sweet {review.sweet_savory_rating ?? "—"}/5</span><span className="min-w-0 truncate">Flavor {review.flavor_intensity_rating ?? "—"}/5</span></div>{review.review && <p className="mt-2 text-sm text-muted-foreground">{review.review}</p>}</article>) : <p className="text-sm font-semibold text-muted-foreground">No reviews yet.</p>}</section>;
 };
 
-const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
+const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { item: MenuItem; sessionUser: UserSession; onClose: () => void; onProtected: (message: string) => void }) => {
   const { toast } = useToast();
-  const [lists, setLists] = useState<FavoriteList[]>([]);
-  const [title, setTitle] = useState(`Best ${item.name}`.slice(0, 80));
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
+  const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!sessionUser) return;
-    supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).then(({ data }) => setLists((data ?? []) as FavoriteList[]));
+    (supabase as any).from("collections").select("id,name,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(20).then(({ data }: { data: Collection[] | null }) => setCollections(data ?? []));
   }, [sessionUser]);
 
-  const addToList = async (list: FavoriteList) => {
-    if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
-    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
-    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
-    if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
-    else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
+  const addToCollection = async (collection: Collection) => {
+    if (!sessionUser) return onProtected("Sign in to save dishes to collections.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved dish before adding it to a collection.", variant: "destructive" });
+    const { error } = await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+    if (error) toast({ title: "Could not save dish", description: error.message, variant: "destructive" });
+    else { toast({ title: "Saved to collection", description: collection.name }); onClose(); }
   };
 
-  const createList = async (event: FormEvent) => {
+  const createCollection = async (event: FormEvent) => {
     event.preventDefault();
-    if (!sessionUser) return onProtected("Sign in to create favorites lists.");
-    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before creating a list.", variant: "destructive" });
-    const parsed = listSchema.safeParse({ title, description, is_public: isPublic });
-    if (!parsed.success) return toast({ title: "Check your list", description: parsed.error.issues[0]?.message, variant: "destructive" });
+    if (!sessionUser) return onProtected("Sign in to create collections.");
+    if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved dish before creating a collection.", variant: "destructive" });
+    const parsed = collectionSchema.safeParse({ name, description, is_public: isPublic });
+    if (!parsed.success) return toast({ title: "Check your collection", description: parsed.error.issues[0]?.message, variant: "destructive" });
     setLoading(true);
-    const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
-    const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
-    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
+    const slug = `${slugify(parsed.data.name)}-${Date.now()}`;
+    const { data: collection, error } = await (supabase as any).from("collections").insert({ name: parsed.data.name, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,name,description,slug,is_public,cover_image_url").single();
+    if (!error && collection) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     setLoading(false);
-    if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
-    toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
+    if (error) return toast({ title: "Collection not created", description: error.message, variant: "destructive" });
+    toast({ title: "Collection created", description: `Saved to ${parsed.data.name}.` });
     onClose();
   };
 
-  if (!sessionUser) { onProtected("Sign in to save menu items to shareable favorites lists."); onClose(); return null; }
-  return <div className="fixed inset-0 z-50 flex items-end overflow-x-hidden bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)] md:max-w-lg"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Save menu item</p><h2 className="font-display text-3xl font-black">Add {item.name} to a list</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{lists.map((list) => <Button key={list.id} className="w-full justify-between" variant="outline" onClick={() => addToList(list)}><span>{list.title}</span><span className="text-xs">{list.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createList} className="mt-4 space-y-3 border-t pt-4"><Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={80} placeholder="List title" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public shareable list</label><Button disabled={loading} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create list and save item</Button></form></div></div>;
+  if (!sessionUser) { onProtected("Sign in to save dishes to collections."); onClose(); return null; }
+  return <div className="fixed inset-0 z-50 flex items-end overflow-x-hidden bg-foreground/30 p-3 backdrop-blur-sm md:items-center md:justify-center"><div className="max-h-[calc(100svh-1.5rem)] w-full max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)] md:max-w-lg"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-sm font-bold text-accent">Saved</p><h2 className="font-display text-3xl font-black">Add to collection</h2></div><Button size="icon" variant="ghost" onClick={onClose} aria-label="Close"><X /></Button></div><div className="space-y-2">{collections.map((collection) => <Button key={collection.id} className="w-full justify-between" variant="outline" onClick={() => addToCollection(collection)}><span className="truncate">{collection.name}</span><span className="text-xs">{collection.is_public ? "Public" : "Private"}</span></Button>)}</div><form onSubmit={createCollection} className="mt-4 space-y-3 border-t pt-4"><Input value={name} onChange={(event) => setName(event.target.value)} maxLength={80} placeholder="New collection" /><Textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={240} placeholder="Description optional" /><label className="flex items-center gap-2 text-sm font-bold"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />Public collection</label><Button disabled={loading || !name.trim()} className="w-full">{loading ? <Loader2 className="animate-spin" /> : <Plus />}Create and add</Button></form></div></div>;
 };
 
 const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void }) => {
@@ -1005,6 +1025,8 @@ type RatingActionRow = { dish_id: string; rating: number; updated_at?: string | 
 
 const DashboardDishGrid = ({ title, dishes, empty }: { title: string; dishes: DashboardDish[]; empty: string }) => <section className="max-w-full overflow-hidden rounded-[28px] glass-surface p-4"><div className="mb-3 flex min-w-0 items-center justify-between gap-3"><h2 className="min-w-0 truncate font-display text-2xl font-black">{title}</h2><span className="soft-chip">{dishes.length}</span></div>{dishes.length ? <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{dishes.slice(0, 6).map((dish) => <a key={`${title}-${dish.id}`} href={`/items/${dish.slug}`} className="group min-w-0 overflow-hidden rounded-3xl bg-secondary/70 shadow-[var(--shadow-soft)] ring-1 ring-border/50 transition active:scale-[0.98]"><div className="relative aspect-[4/5] overflow-hidden bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-10 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-background/86 via-transparent to-transparent" /><span className="absolute left-2 top-2 soft-chip text-accent"><Star className="size-3 fill-current" />{(dish.user_rating ?? dish.aggregate_rating ?? 0).toFixed(1)}</span><div className="absolute inset-x-0 bottom-0 p-3"><p className="line-clamp-2 font-display text-xl font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-foreground/70">{dish.restaurant_name || dish.cuisine || dish.section || "Dish"}</p></div></div></a>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">{empty}</p>}</section>;
 
+const CollectionGrid = ({ collections }: { collections: CollectionPreview[] }) => <section className="max-w-full overflow-hidden rounded-[28px] glass-surface p-4"><div className="mb-3 flex min-w-0 items-center justify-between gap-3"><h2 className="min-w-0 truncate font-display text-2xl font-black">Collections</h2><span className="soft-chip">{collections.length}</span></div>{collections.length ? <div className="grid min-w-0 gap-3 md:grid-cols-2">{collections.map((collection) => <article key={collection.id} className="min-w-0 overflow-hidden rounded-3xl bg-secondary/65 p-3 ring-1 ring-border/50"><div className="grid aspect-[5/3] grid-cols-3 gap-1 overflow-hidden rounded-2xl bg-secondary">{collection.dishes.slice(0, 3).map((dish) => <a key={dish.id} href={`/items/${dish.slug}`} className="min-w-0 overflow-hidden bg-background/40">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover" loading="lazy" decoding="async" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-6 opacity-40" /></div>}</a>)}{!collection.dishes.length && <div className="col-span-3 flex h-full items-center justify-center"><Bookmark className="size-10 opacity-40" /></div>}</div><div className="mt-3 flex min-w-0 items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate font-display text-xl font-black">{collection.name}</h3><p className="mt-1 text-xs font-bold text-accent">{collection.item_count ?? collection.dishes.length} dishes · {collection.is_public ? "Public" : "Private"}</p></div></div>{collection.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{collection.description}</p>}</article>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">Saved dishes land in Saved. Create collections like NYC spots, Best desserts, or Date night.</p>}</section>;
+
 const WantToTryPlanner = ({ dishes, hasLocation, onUseLocation }: { dishes: WantToTryDish[]; hasLocation: boolean; onUseLocation: () => void }) => {
   const groups = useMemo(() => Array.from(dishes.reduce<Map<string, WantToTryDish[]>>((map, dish) => map.set(dish.location_group, [...(map.get(dish.location_group) ?? []), dish]), new Map()).entries()), [dishes]);
   return <section className="max-w-full overflow-hidden rounded-[28px] glass-surface p-4"><div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3"><h2 className="font-display text-2xl font-black">Want to try</h2><div className="flex items-center gap-2"><span className="soft-chip">{dishes.length}</span>{!hasLocation && <Button size="sm" variant="outline" className="rounded-full" onClick={onUseLocation}><LocateFixed className="size-4" />Sort nearby</Button>}</div></div>{dishes.length ? <div className="space-y-4">{groups.map(([location, items]) => <div key={location} className="rounded-3xl bg-secondary/55 p-3"><div className="mb-3 flex min-w-0 items-center justify-between gap-2"><h3 className="min-w-0 break-words font-display text-xl font-black"><MapPin className="mr-1 inline size-4 text-accent" />{location}</h3><span className="soft-chip text-accent">{items.length}</span></div><div className="grid min-w-0 gap-3 md:grid-cols-2">{items.map((dish) => <a key={dish.id} href={`/items/${dish.slug}`} className="group grid min-w-0 grid-cols-[72px_minmax(0,1fr)] gap-3 rounded-2xl bg-background/75 p-2 ring-1 ring-border/45 transition active:scale-[0.98] sm:grid-cols-[84px_minmax(0,1fr)]"><div className="aspect-square overflow-hidden rounded-2xl bg-secondary">{dish.cover_image_url ? <img src={dish.cover_image_url} alt={dish.name} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-8 opacity-40" /></div>}</div><div className="min-w-0 py-1"><div className="mb-1 flex min-w-0 flex-wrap gap-1"><span className="soft-chip text-accent"><Star className="size-3 fill-current" />{Number(dish.aggregate_rating ?? 0).toFixed(1)}</span>{dish.distance_miles != null && <span className="soft-chip">{dish.distance_miles.toFixed(1)} mi</span>}</div><p className="line-clamp-2 font-display text-lg font-black leading-none">{dish.name}</p><p className="mt-1 line-clamp-1 text-xs font-bold text-muted-foreground">{dish.restaurants?.name || dish.cuisine || "Dish"}</p><p className="mt-2 text-xs font-black text-accent">{dish.plan_group}</p></div></a>)}</div></div>)}</div> : <p className="rounded-3xl bg-secondary/60 p-4 text-sm font-bold text-muted-foreground">Save dishes you are craving next.</p>}</section>;
@@ -1016,6 +1038,7 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
   const [wantToTry, setWantToTry] = useState<DashboardDish[]>([]);
   const [wantToTryPlan, setWantToTryPlan] = useState<WantToTryDish[]>([]);
   const [recentRated, setRecentRated] = useState<DashboardDish[]>([]);
+  const [collections, setCollections] = useState<CollectionPreview[]>([]);
 
   useEffect(() => {
     if (!sessionUser) return;
@@ -1024,12 +1047,20 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
       supabase.from("saved_items").select("dish_id,action_type,updated_at,created_at").eq("user_id", sessionUser.id).in("action_type", ["favorite", "want_to_try"]).order("updated_at", { ascending: false }).limit(30),
       supabase.from("ratings").select("dish_id,rating,updated_at,created_at").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(18),
       withTimeout(supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }), 8000, "Want-to-try").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Want-to-try timed out." }, error: null })),
-    ]).then(async ([savedResult, ratingsResult, wantToTryResult]) => {
+      (supabase as any).from("collections").select("id,name,description,slug,is_public,cover_image_url,collection_dishes(dishes(id,name,slug,cuisine,section,aggregate_rating,review_count)))").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(12),
+    ]).then(async ([savedResult, ratingsResult, wantToTryResult, collectionsResult]) => {
       if (!wantToTryResult.error && !wantToTryResult.data?.error) setWantToTryPlan((wantToTryResult.data?.dishes ?? []) as WantToTryDish[]);
       else setWantToTryPlan([]);
       const savedRows = (savedResult.data ?? []) as SavedActionRow[];
       const ratingRows = (ratingsResult.data ?? []) as RatingActionRow[];
       const dishIds = Array.from(new Set([...savedRows.map((row) => row.dish_id), ...ratingRows.map((row) => row.dish_id)].filter(Boolean)));
+      const collectionRows = (collectionsResult.data ?? []) as Array<Collection & { collection_dishes?: Array<{ dishes?: DashboardDish | null }> }>;
+      const collectionDishIds = Array.from(new Set(collectionRows.flatMap((collection) => (collection.collection_dishes ?? []).map((row) => row.dishes?.id).filter(Boolean) as string[])));
+      if (collectionDishIds.length) {
+        const { data: collectionPhotos } = await supabase.from("photos").select("dish_id,image_url").in("dish_id", collectionDishIds).eq("is_public", true).order("created_at", { ascending: false });
+        const collectionPhotoByDish = new Map((collectionPhotos ?? []).filter((photo) => photo.image_url).map((photo) => [photo.dish_id, photo.image_url]));
+        setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: (collection.collection_dishes ?? []).map((row) => row.dishes).filter(Boolean).slice(0, 6).map((dish) => ({ ...dish!, cover_image_url: collectionPhotoByDish.get(dish!.id) ?? null })) })));
+      } else setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: [] })));
       if (!dishIds.length) { setFavorites([]); setWantToTry([]); setRecentRated([]); setLoading(false); return; }
       const { data: dishRows } = await supabase.from("dishes").select("id,name,slug,cuisine,section,aggregate_rating,review_count,restaurant_id").in("id", dishIds).eq("is_published", true);
       const restaurantIds = Array.from(new Set(((dishRows ?? []) as { restaurant_id?: string | null }[]).map((dish) => dish.restaurant_id).filter(Boolean) as string[]));
@@ -1053,7 +1084,7 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
   const averageRating = recentRated.length ? (recentRated.reduce((sum, dish) => sum + Number(dish.user_rating ?? 0), 0) / recentRated.length).toFixed(1) : "—";
 
   if (!sessionUser) return <section className="rounded-[28px] glass-surface p-5"><h1 className="font-display text-4xl font-black">Your food identity</h1><p className="mt-2 text-muted-foreground">Browse, search, take photos, and draft reviews. Sign in when you want to save your taste.</p><Button className="mt-4 rounded-full" onClick={() => onProtected("Sign in to save favorites, lists, and contribution history.")}><LogIn />Sign in</Button></section>;
-  return <section className="space-y-4"><div className="relative overflow-hidden rounded-[32px] bg-secondary p-5 shadow-[var(--shadow-editorial)] ring-1 ring-border/60"><div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-accent/15" /><div className="relative"><p className="soft-chip mb-3 text-accent"><User className="size-4" />Food profile</p><h1 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">Your taste map</h1><p className="mt-2 line-clamp-1 text-sm font-bold text-foreground/70">{sessionUser.email}</p><div className="mt-5 grid grid-cols-3 gap-2"><Metric icon={Heart} label="favorites" value={String(favorites.length)} /><Metric icon={Bookmark} label="want" value={String(wantToTry.length)} /><Metric icon={Star} label="avg" value={averageRating} /></div></div></div>{loading ? <SearchResultsLoader /> : <><ShareableLists sessionUser={sessionUser} onProtected={onProtected} /><DashboardDishGrid title="Favorite dishes" dishes={favorites} empty="Favorite dishes to shape your identity." /><WantToTryPlanner hasLocation={Boolean(userLocation)} onUseLocation={onUseLocation} dishes={wantToTryPlan.length ? wantToTryPlan : wantToTry.map((dish) => ({ ...dish, tags: [], dietary_tags: [], currency: "USD", photo_count: 0, restaurants: dish.restaurant_name ? { name: dish.restaurant_name } : null, location_group: dish.restaurant_name || "Location pending", plan_group: "Saved for later" as const }))} /><DashboardDishGrid title="Recently rated" dishes={recentRated} empty="Rate dishes to build your taste history." /><div className="grid gap-4 md:grid-cols-2"><section className="rounded-[28px] glass-surface p-4"><h2 className="font-display text-2xl font-black">Top cuisines</h2><div className="mt-3 flex flex-wrap gap-2">{topCuisines.length ? topCuisines.map(([name, count]) => <span key={name} className="soft-chip text-accent">{name} · {count}</span>) : <p className="text-sm font-bold text-muted-foreground">Start saving dishes to reveal your cuisine pattern.</p>}</div></section><section className="rounded-[28px] glass-surface p-4"><h2 className="font-display text-2xl font-black">Most visited</h2><div className="mt-3 space-y-2">{topRestaurants.length ? topRestaurants.map(([name, count]) => <div key={name} className="flex items-center justify-between rounded-2xl bg-secondary/70 p-3"><span className="font-black line-clamp-1">{name}</span><span className="soft-chip">{count}</span></div>) : <p className="text-sm font-bold text-muted-foreground">Restaurant patterns appear as you rate and save dishes.</p>}</div></section></div></>}</section>;
+  return <section className="space-y-4"><div className="relative overflow-hidden rounded-[32px] bg-secondary p-5 shadow-[var(--shadow-editorial)] ring-1 ring-border/60"><div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-transparent to-accent/15" /><div className="relative"><p className="soft-chip mb-3 text-accent"><User className="size-4" />Food profile</p><h1 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">Your taste map</h1><p className="mt-2 line-clamp-1 text-sm font-bold text-foreground/70">{sessionUser.email}</p><div className="mt-5 grid grid-cols-3 gap-2"><Metric icon={Heart} label="favorites" value={String(favorites.length)} /><Metric icon={Bookmark} label="want" value={String(wantToTry.length)} /><Metric icon={Star} label="avg" value={averageRating} /></div></div></div>{loading ? <SearchResultsLoader /> : <><CollectionGrid collections={collections} /><ShareableLists sessionUser={sessionUser} onProtected={onProtected} /><DashboardDishGrid title="Favorite dishes" dishes={favorites} empty="Favorite dishes to shape your identity." /><WantToTryPlanner hasLocation={Boolean(userLocation)} onUseLocation={onUseLocation} dishes={wantToTryPlan.length ? wantToTryPlan : wantToTry.map((dish) => ({ ...dish, tags: [], dietary_tags: [], currency: "USD", photo_count: 0, restaurants: dish.restaurant_name ? { name: dish.restaurant_name } : null, location_group: dish.restaurant_name || "Location pending", plan_group: "Saved for later" as const }))} /><DashboardDishGrid title="Recently rated" dishes={recentRated} empty="Rate dishes to build your taste history." /><div className="grid gap-4 md:grid-cols-2"><section className="rounded-[28px] glass-surface p-4"><h2 className="font-display text-2xl font-black">Top cuisines</h2><div className="mt-3 flex flex-wrap gap-2">{topCuisines.length ? topCuisines.map(([name, count]) => <span key={name} className="soft-chip text-accent">{name} · {count}</span>) : <p className="text-sm font-bold text-muted-foreground">Start saving dishes to reveal your cuisine pattern.</p>}</div></section><section className="rounded-[28px] glass-surface p-4"><h2 className="font-display text-2xl font-black">Most visited</h2><div className="mt-3 space-y-2">{topRestaurants.length ? topRestaurants.map(([name, count]) => <div key={name} className="flex items-center justify-between rounded-2xl bg-secondary/70 p-3"><span className="font-black line-clamp-1">{name}</span><span className="soft-chip">{count}</span></div>) : <p className="text-sm font-bold text-muted-foreground">Restaurant patterns appear as you rate and save dishes.</p>}</div></section></div></>}</section>;
 };
 
 export default Index;
