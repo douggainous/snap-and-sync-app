@@ -163,6 +163,26 @@ const collectionSchema = z.object({
   description: z.string().trim().max(240, "Keep descriptions under 240 characters.").optional(),
   is_public: z.boolean(),
 });
+const restaurantClaimSchema = z.object({
+  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(160),
+  contact_email: z.string().trim().email("Use a valid contact email.").max(254).optional().or(z.literal("")),
+  website_url: z.string().trim().url("Use a valid website URL.").max(300).optional().or(z.literal("")),
+});
+const restaurantDishSubmissionSchema = z.object({
+  restaurant_name: z.string().trim().min(2, "Restaurant name is required.").max(160),
+  dish_name: z.string().trim().min(2, "Dish name is required.").max(160),
+  description: z.string().trim().max(500).optional(),
+  cuisine: z.string().trim().max(80).optional(),
+  typical_price: z.preprocess((value) => value === "" || value === null ? undefined : value, z.coerce.number().min(0).max(10000).optional()),
+});
+const officialDishPhotoSchema = z.object({
+  image_url: z.string().trim().url("Use a valid photo URL.").max(600),
+  caption: z.string().trim().max(180).optional(),
+});
+const boostRequestSchema = z.object({
+  requested_boost_score: z.coerce.number().min(1).max(25),
+  budget_cents: z.preprocess((value) => value === "" || value === null ? undefined : Math.round(Number(value) * 100), z.number().int().min(0).max(100000000).optional()),
+});
 
 const photoReviewSchema = reviewSchema.extend({
   restaurant_name: z.string().trim().max(120, "Keep restaurant names under 120 characters.").optional(),
@@ -258,6 +278,9 @@ const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
+type DbError = { message: string };
+type InsertResult = Promise<{ error: DbError | null }>;
+const restaurantParticipationDb = supabase as unknown as { from: (table: "restaurant_claims" | "restaurant_dish_submissions" | "restaurant_official_photos" | "restaurant_boost_requests") => { insert: (values: Record<string, unknown>) => InsertResult } };
 const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
 const convertHeicFile = async (file: File) => {
   if (!isHeicFile(file)) return file;
