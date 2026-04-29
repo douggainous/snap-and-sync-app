@@ -311,9 +311,22 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
   finally { if (timeoutId) clearTimeout(timeoutId); }
 };
 
-const FeedItemCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave?: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+  const clearLongPress = () => { if (longPressTimer.current) clearTimeout(longPressTimer.current); longPressTimer.current = null; };
+  const startLongPress = () => {
+    longPressTriggered.current = false;
+    clearLongPress();
+    longPressTimer.current = setTimeout(() => { longPressTriggered.current = true; onAddToList?.(item); }, 520);
+  };
+  const quickWantToTry = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    if (longPressTriggered.current) { longPressTriggered.current = false; return; }
+    onDishAction?.(item, "want_to_try", !item.user_want_to_try);
+  };
 
   return (
     <article className="feed-reel group overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.99]">
@@ -333,19 +346,19 @@ const FeedItemCard = ({ item, userLocation, onDishAction }: { item: MenuItem; us
           <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-secondary"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span>{item.cuisine && <><span>·</span><span>{item.cuisine}</span></>}</div>
           {item.tags.length > 0 && <div className="mt-2 flex max-w-full gap-2 overflow-hidden">{item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0 px-2.5 py-0.5 text-[11px]">{tag}</span>)}</div>}
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:w-44">
-          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_favorite && "bg-primary text-primary-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /><span>Save</span></button>
-          <button type="button" className={cn("inline-flex h-11 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_want_to_try && "bg-accent text-accent-foreground")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /><span>Try</span></button>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:w-72">
+          <button type="button" className={cn("inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_want_to_try && "bg-accent text-accent-foreground")} onPointerDown={startLongPress} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress} onClick={quickWantToTry} aria-label="Want to try. Hold to choose a list"><Bookmark className={cn("size-4 shrink-0", item.user_want_to_try && "fill-current")} /><span className="truncate">Want to try</span></button>
+          <button type="button" className="inline-flex size-11 items-center justify-center rounded-full border border-border/70 bg-secondary text-foreground transition active:scale-95" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button>
         </div>
       </div>
     </article>
   );
 };
 
-const SearchDishCard = ({ item, userLocation, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const SearchDishCard = ({ item, userLocation, onDishAction, onAddToList }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
-  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/dish/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/38 to-transparent" /><div className="absolute left-3 top-3 flex max-w-[calc(100%-4rem)] flex-wrap gap-1.5"><span className="soft-chip text-primary"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-3" />{label}</span>)}</div><button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "favorite", !item.user_favorite); }} aria-label="Save dish"><Heart className={cn("size-4", item.user_favorite && "fill-current")} /></button><button type="button" className="absolute right-3 top-16 thumb-action size-10" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button><div className="absolute inset-x-0 bottom-0 p-3 text-text-inverse"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
+  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><a href={`/dish/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/38 to-transparent" /><div className="absolute left-3 top-3 flex max-w-[calc(100%-4rem)] flex-wrap gap-1.5"><span className="soft-chip text-primary"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-3" />{label}</span>)}</div><button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /></button><button type="button" className="absolute right-3 top-16 thumb-action size-10" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-4" /></button><button type="button" className="absolute right-3 top-[6.5rem] thumb-action size-10" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button><div className="absolute inset-x-0 bottom-0 p-3 text-text-inverse"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></a></article>;
 };
 
 const ItemCard = FeedItemCard;
@@ -383,7 +396,7 @@ const Index = () => {
   const [scanRestaurant, setScanRestaurant] = useState("");
   const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
-  const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
+  const [listTarget, setListTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
@@ -649,18 +662,17 @@ const Index = () => {
   };
 
   const toggleDishAction = async (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => {
-    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save"} dishes.`);
+    if (!sessionUser) return setAuthPrompt(`Sign in to ${action === "favorite" ? "favorite" : "save dishes you want to try"}.`);
     if (!isUuid(item.id)) return toast({ title: "Seed item", description: "Open or create a real dish before saving it.", variant: "destructive" });
     const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
-    if (enabled) {
-      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "Saved", slug: "saved", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
+    if (enabled && action === "want_to_try") {
+      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "I want to try", slug: "i-want-to-try", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
       if (collection?.id) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     }
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
-    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Saved to want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? "Your dish interaction is stored." : "Your dish interaction was removed." });
-    if (enabled) setFavoriteTarget(item);
+    toast({ title: enabled ? (action === "favorite" ? "Favorited" : "Added to I want to try") : (action === "favorite" ? "Favorite removed" : "Want to try removed"), description: enabled ? (action === "want_to_try" ? "Hold Want to try next time to choose a list." : "Your dish interaction is stored.") : "Your dish interaction was removed." });
   };
 
   const startFirstReview = (item: MenuItem) => {
