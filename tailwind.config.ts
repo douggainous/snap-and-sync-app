@@ -22,6 +22,15 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        text: {
+          primary: "hsl(var(--text-primary))",
+          secondary: "hsl(var(--text-secondary))",
+          inverse: "hsl(var(--text-inverse))",
+        },
+        surface: {
+          primary: "hsl(var(--background-primary))",
+          secondary: "hsl(var(--background-secondary))",
+        },
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
