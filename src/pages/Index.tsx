@@ -119,6 +119,7 @@ type FavoriteList = {
   cover_image_url?: string | null;
 };
 type FavoriteListDetail = FavoriteList & { items: MenuItem[] };
+type DishListItemInsert = { list_id: string; dish_id: string };
 
 const reviewSchema = z.object({
   rating: z.coerce.number().min(1, "Choose a rating from 1 to 5.").max(5, "Choose a rating from 1 to 5."),
@@ -265,11 +266,11 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
   return (
     <article className="overflow-hidden rounded-xl border bg-card shadow-[var(--shadow-editorial)]">
       <a href={`/items/${item.slug}`} className="group relative block overflow-hidden bg-secondary">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name}`} className="h-[420px] w-full object-cover transition duration-500 group-hover:scale-105 sm:h-[520px]" loading="lazy" width={960} height={720} /> : <div className="flex h-[420px] w-full items-center justify-center bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 text-secondary-foreground sm:h-[520px]"><ChefHat className="size-24 opacity-50" /></div>}
+          {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-[420px] w-full object-cover transition duration-500 group-hover:scale-105 sm:h-[520px]" loading="lazy" width={960} height={720} /> : <div className="flex h-[420px] w-full items-center justify-center bg-gradient-to-br from-accent/35 via-primary/25 to-destructive/25 text-secondary-foreground sm:h-[520px]"><ChefHat className="size-24 opacity-50" /></div>}
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/20 to-transparent" />
         <div className="absolute left-4 top-4 rounded-full bg-accent px-4 py-2 text-xl font-black text-accent-foreground shadow-[var(--shadow-soft)]"><Star className="mr-1 inline size-6 fill-current" />{item.aggregate_rating}</div>
         <div className="absolute bottom-0 left-0 right-0 p-4 text-foreground sm:p-6">
-          <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-black text-accent"><MapPin className="size-3" />{item.restaurants?.name} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "Nearby"}</p>
+          <p className="mb-2 inline-flex items-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-black text-accent"><MapPin className="size-3" />{item.restaurants?.name ?? "Standalone dish"} · {miles ? `${miles.toFixed(1)} mi` : item.restaurants?.city ?? "No restaurant linked"}</p>
           <h2 className="font-display text-4xl font-black leading-none sm:text-6xl">{item.name}</h2>
           <p className="mt-3 line-clamp-2 max-w-2xl text-sm font-semibold text-foreground/85 sm:text-base">{item.description}</p>
         </div>
@@ -766,10 +767,10 @@ const PhotoReviewComposer = ({ imageFiles, photoPreviews, restaurantName, dishNa
     if (!parsed.success) return toast({ title: "Check your review", description: parsed.error.issues[0]?.message ?? "Some fields need attention.", variant: "destructive" });
 
     setSaving(true);
-    const firstFile = await optimizeImageFile(imageFiles[0]);
-    const imageBase64 = await fileToBase64(firstFile);
+    const optimizedFiles = await Promise.all(imageFiles.slice(0, 6).map((file) => optimizeImageFile(file)));
+    const images = await Promise.all(optimizedFiles.map(async (file) => ({ imageBase64: await fileToBase64(file), mimeType: file.type, fileName: file.name })));
     const cleanTags = (parsed.data.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean).slice(0, 8);
-    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, imageBase64, mimeType: firstFile.type, fileName: firstFile.name, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
+    const { data, error } = await supabase.functions.invoke("capture-dish", { body: { dishName: parsed.data.dish_name, restaurantName: parsed.data.restaurant_name || null, images, rating: parsed.data.rating, review: parsed.data.review || null, pricePaid: parsed.data.price_paid ?? null, tags: cleanTags, metrics: { wouldOrderAgain: parsed.data.would_order_again, temperature: parsed.data.temperature_rating, spiciness: parsed.data.spiciness_rating, sweetSavory: parsed.data.sweet_savory_rating, flavorIntensity: parsed.data.flavor_intensity_rating } } });
     setSaving(false);
     if (error || data?.error) return toast({ title: "Dish not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     const aiSuggestion = data?.aiSuggestion;
@@ -840,7 +841,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
   const addToList = async (list: FavoriteList) => {
     if (!sessionUser) return onProtected("Sign in to save menu items to shareable favorites lists.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved menu item before adding it to a list.", variant: "destructive" });
-    const { error } = await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    const { error } = await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
     if (error) toast({ title: "Could not save item", description: error.message, variant: "destructive" });
     else { toast({ title: "Saved to list", description: list.is_public ? `Share it at ${listUrl(list.slug)}` : "This list is private." }); onClose(); }
   };
@@ -854,7 +855,7 @@ const SaveToListModal = ({ item, sessionUser, onClose, onProtected }: { item: Me
     setLoading(true);
     const slug = `${slugify(parsed.data.title)}-${Date.now()}`;
     const { data: list, error } = await supabase.from("favorite_lists").insert({ title: parsed.data.title, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,title,description,slug,is_public,cover_image_url").single();
-    if (!error && list) await supabase.from("favorite_list_items").insert({ list_id: list.id, menu_item_id: item.id });
+    if (!error && list) await supabase.from("favorite_list_items").upsert({ list_id: list.id, dish_id: item.id } as DishListItemInsert, { onConflict: "list_id,dish_id" });
     setLoading(false);
     if (error) return toast({ title: "List not created", description: error.message, variant: "destructive" });
     toast({ title: "List created", description: parsed.data.is_public ? `Public at ${listUrl(slug)}` : "Private list saved." });
@@ -870,8 +871,8 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
   useEffect(() => {
     supabase.from("favorite_lists").select("id,title,description,slug,is_public,cover_image_url").eq("slug", slug).maybeSingle().then(async ({ data }) => {
       if (!data) return setList(null);
-      const { data: rows } = await supabase.from("favorite_list_items").select("menu_items(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference))").eq("list_id", data.id).order("sort_order");
-      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.menu_items).filter(Boolean) as unknown as MenuItem[]) });
+      const { data: rows } = await supabase.from("favorite_list_items").select("dishes(*, restaurants(name,address,city,cuisine,latitude,longitude,phone,website_url,email,google_place_id,rating,review_count,price_level,business_status,maps_url,photo_reference))").eq("list_id", data.id).order("sort_order");
+      setList({ ...(data as FavoriteList), items: ((rows ?? []).map((row) => row.dishes).filter(Boolean) as unknown as MenuItem[]) });
     });
   }, [slug]);
   if (!list) return <section className="rounded-lg border bg-card p-5"><h1 className="font-display text-4xl font-black">List not found</h1><p className="text-muted-foreground">This favorites list may be private or unavailable.</p></section>;
