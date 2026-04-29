@@ -23,6 +23,19 @@ const BodySchema = z.discriminatedUnion("type", [
       flavorIntensity: z.number().int().min(1).max(5).optional(),
     }).optional(),
   }),
+  z.object({
+    type: z.literal("suggest_caption"),
+    dishId: z.string().uuid(),
+    rating: z.number().min(1).max(5),
+    tags: z.array(z.string().trim().min(1).max(60)).max(8).optional().default([]),
+    metrics: z.object({
+      wouldOrderAgain: z.boolean().optional(),
+      temperature: z.number().int().min(1).max(5).optional(),
+      spiciness: z.number().int().min(0).max(5).optional(),
+      sweetSavory: z.number().int().min(1).max(5).optional(),
+      flavorIntensity: z.number().int().min(1).max(5).optional(),
+    }).optional(),
+  }),
   z.object({ type: z.literal("toggle_action"), dishId: z.string().uuid(), action: z.enum(["want_to_try", "favorite"]), enabled: z.boolean() }),
   z.object({ type: z.literal("share"), dishId: z.string().uuid(), channel: z.string().trim().min(1).max(40).optional().default("native") }),
 ]);
@@ -34,6 +47,42 @@ function json(data: unknown, status = 200) {
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "tag";
 const cleanTag = (value: string) => value.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
+const sha256Hex = async (value: string) => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)))).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+async function generateCaptionSuggestion(supabase: ReturnType<typeof createClient>, suggestionId: string, input: { dishName: string; cuisine?: string | null; restaurantName?: string | null; rating: number; tags: string[]; metrics?: Record<string, unknown> }) {
+  const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+  if (!lovableApiKey) {
+    await supabase.from("review_caption_suggestions").update({ status: "failed", error: "AI captions are not configured." }).eq("id", suggestionId);
+    return;
+  }
+
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${lovableApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "google/gemini-3-flash-preview",
+      messages: [
+        { role: "system", content: "Write one natural, short food review caption. No hashtags, no emojis, no marketing language, no more than 18 words. Return only tool output." },
+        { role: "user", content: `Create a caption from this rating context: ${JSON.stringify(input)}` },
+      ],
+      tools: [{ type: "function", function: { name: "suggest_caption", description: "Return a short editable dish review caption.", parameters: { type: "object", properties: { caption: { type: "string", maxLength: 180 } }, required: ["caption"], additionalProperties: false } } }],
+      tool_choice: { type: "function", function: { name: "suggest_caption" } },
+    }),
+  });
+
+  if (!response.ok) {
+    const status = response.status === 429 ? "rate_limited" : response.status === 402 ? "payment_required" : "failed";
+    await supabase.from("review_caption_suggestions").update({ status, error: status === "rate_limited" ? "AI is busy. Write your own caption for now." : status === "payment_required" ? "AI captions are temporarily unavailable." : "AI caption generation failed." }).eq("id", suggestionId);
+    if (status === "failed") console.error("caption AI failed", response.status, await response.text());
+    return;
+  }
+
+  const data = await response.json();
+  const toolArgs = data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  const caption = toolArgs ? (JSON.parse(toolArgs)?.caption ?? "").trim().replace(/\s+/g, " ").slice(0, 180) : "";
+  await supabase.from("review_caption_suggestions").update({ status: caption ? "completed" : "failed", caption: caption || null, error: caption ? null : "AI returned no caption.", model: "google/gemini-3-flash-preview" }).eq("id", suggestionId);
+}
 
 async function refreshTasteProfile(supabase: ReturnType<typeof createClient>, userId: string) {
   const cuisineScores: Record<string, number> = {};
