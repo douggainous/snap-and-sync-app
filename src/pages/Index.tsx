@@ -685,14 +685,14 @@ const Index = () => {
         </div>
       </header>
 
-      <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 py-3 md:grid-cols-[180px_minmax(0,1fr)] md:px-6 md:py-6">
-        <aside className="hidden md:block">
+      <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 py-3 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
+        <aside className="hidden lg:block">
           <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); if (item.id !== "discover") navigate("/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
-        <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 md:px-0">
+        <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 lg:px-0">
           {searchPanelOpen && (
-            <div className="fixed inset-x-3 bottom-[88px] z-40 max-w-[calc(100vw-1.5rem)] rounded-3xl glass-surface p-3 md:hidden">
+            <div className={cn("z-40 max-w-full rounded-3xl glass-surface p-3 lg:hidden", selectedItem ? "relative w-full" : "fixed inset-x-3 bottom-[88px] max-w-[calc(100vw-1.5rem)]")}>
               <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus className="h-12 rounded-full bg-secondary/80 pl-10 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2 rounded-full" aria-label="Search"><Search className="size-4" /></Button></form>
             </div>
           )}
@@ -701,7 +701,7 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              <section className="sticky top-[66px] z-20 -mx-3 max-w-[calc(100%+1.5rem)] space-y-2 overflow-hidden border-y border-border/40 bg-background/72 px-3 py-2 backdrop-blur-2xl md:top-20 md:mx-0 md:max-w-full md:rounded-[28px] md:border">
+              <section className="sticky top-[66px] z-20 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-y border-border/40 bg-background/72 px-3 py-3 backdrop-blur-2xl lg:top-20 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border">
                 <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" /><Input className="h-14 rounded-full border-foreground/10 bg-secondary/70 pl-12 pr-12 text-lg font-black" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-2 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-background/70 text-muted-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button></form>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">{suggestedSearches.map((suggestion) => <button key={suggestion} type="button" onClick={() => applySearchSuggestion(suggestion)} className="soft-chip shrink-0 transition active:scale-95">{suggestion}</button>)}</div>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">
@@ -710,7 +710,7 @@ const Index = () => {
                   <Select value={minRating} onValueChange={setMinRating}><SelectTrigger className="h-10 min-w-24 rounded-full bg-secondary/70"><SelectValue placeholder="Rating" /></SelectTrigger><SelectContent><SelectItem value="0">Any ★</SelectItem><SelectItem value="3.5">3.5★+</SelectItem><SelectItem value="4">4★+</SelectItem><SelectItem value="4.5">4.5★+</SelectItem></SelectContent></Select>
                 </div>
               </section>
-              {!query && <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">{trendingQueries.map((trend) => <button key={trend} type="button" onClick={() => applySearchSuggestion(trend)} className="soft-chip shrink-0 text-accent"><Sparkles className="size-4" />{trend}</button>)}</div>}
+              {!query && <div className="relative z-0 mt-1 flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">{trendingQueries.map((trend) => <button key={trend} type="button" onClick={() => applySearchSuggestion(trend)} className="soft-chip shrink-0 text-accent"><Sparkles className="size-4" />{trend}</button>)}</div>}
               {!query && <div className="grid grid-cols-3 gap-2 rounded-full glass-surface p-1.5">
                 {([{ id: "trending", label: "Hot", icon: Sparkles }, { id: "nearby", label: "Near", icon: MapPin }, { id: "recent", label: "New", icon: Clock }] as const).map((mode) => <Button key={mode.id} variant={feedMode === mode.id ? "default" : "ghost"} className="rounded-full" onClick={() => { if (mode.id === "nearby" && !userLocation) askLocation(); else setFeedMode(mode.id); }}><mode.icon />{mode.label}</Button>)}
               </div>}
