@@ -1,8 +1,5 @@
-import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, MouseEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
-import { Capacitor } from "@capacitor/core";
-import heic2any from "heic2any";
 import { z } from "zod";
 import {
   Bookmark,
@@ -228,6 +225,7 @@ const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { 
 const isHeicFile = (file: File) => /image\/(heic|heif)/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
 const convertHeicFile = async (file: File) => {
   if (!isHeicFile(file)) return file;
+  const { default: heic2any } = await import("heic2any");
   const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.86 });
   const blob = Array.isArray(converted) ? converted[0] : converted;
   return new File([blob], `${slugify(file.name.replace(/\.[^.]+$/, "")) || "food-photo"}.jpg`, { type: "image/jpeg" });
