@@ -12,10 +12,10 @@ const VELOCITY_WINDOW_DAYS = 14;
 const LOW_QUALITY_RATING_FLOOR = 3.2;
 const STALE_DAYS = 180;
 const DEFAULT_WEIGHTS = {
-  quality: 0.38,
-  popularity: 0.27,
-  trending: 0.22,
-  personalization: 0.13,
+  quality: 0.34,
+  popularity: 0.26,
+  trending: 0.24,
+  personalization: 0.16,
 };
 
 const BodySchema = z.object({
@@ -143,22 +143,25 @@ function ageDays(date?: string | null) {
   return Math.max(0, (Date.now() - new Date(date).getTime()) / 86_400_000);
 }
 
-function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS) {
+function scoreDish(dish: DishRow, dishTags: string[], recent: RecentEngagement, userSignals: UserSignals, weights: typeof DEFAULT_WEIGHTS, trend?: TrendMetric) {
   const rating = Number(dish.aggregate_rating ?? 0);
   const ratingCount = Number(dish.rating_count ?? 0);
-  const engagementTotal = Number(dish.want_to_try_count ?? 0) + Number(dish.favorite_count ?? 0) + Number(dish.save_count ?? 0) + Number(dish.like_count ?? 0) + Number(dish.review_count ?? 0) + Number(dish.photo_count ?? 0);
-  const qualityScore = clamp((rating / 5) * 78 + Math.min(22, Math.log1p(ratingCount) * 7));
-  const popularityScore = clamp(Math.log1p(engagementTotal * 1.2 + ratingCount * 1.5 + Number(dish.favorite_count ?? 0) * 2 + Number(dish.want_to_try_count ?? 0) * 1.7) * 16);
-  const velocityEvents = recent.ratings * 2.4 + recent.favorites * 2.8 + recent.wantToTry * 2.1 + recent.saves * 1.2;
+  const ratingConfidence = 1 - Math.exp(-ratingCount / 6);
+  const qualityScore = clamp((rating / 5) * 72 * ratingConfidence + Math.min(28, Math.log1p(ratingCount) * 10));
+  const engagementTotal = Number(dish.favorite_count ?? 0) * 3.4 + Number(dish.want_to_try_count ?? 0) * 2.2 + Number(dish.save_count ?? 0) * 1.5 + Number(dish.like_count ?? 0) + Number(dish.review_count ?? 0) * 1.4 + Number(dish.photo_count ?? 0) * 1.1 + ratingCount * 1.8;
+  const popularityScore = clamp(Math.log1p(engagementTotal) * 18);
+  const persistedVelocity = Number(trend?.trend_score ?? 0) * 1.15 + Number(trend?.spike_score ?? 0) * 1.8 + Number(trend?.recent_rating_count ?? 0) * 2.2 + Number(trend?.recent_save_count ?? 0) * 1.8 + Number(trend?.recent_share_count ?? 0) * 2.8 + Math.max(0, Number(trend?.rating_velocity ?? 0)) * 2.4 + Math.max(0, Number(trend?.save_velocity ?? 0)) * 2;
+  const recentVelocity = recent.ratings * 2.4 + recent.favorites * 3 + recent.wantToTry * 2.2 + recent.saves * 1.4;
   const velocityFreshness = Math.max(0, 1 - ageDays(recent.lastEventAt) / VELOCITY_WINDOW_DAYS);
-  const trendingScore = clamp(Math.log1p(velocityEvents) * 26 * (0.65 + velocityFreshness * 0.35) + recencyBoost(dish.created_at) * 0.45);
+  const statusBoost = trend?.status === "viral" ? 24 : trend?.status === "trending" ? 12 : 0;
+  const trendingScore = clamp(Math.log1p(persistedVelocity + recentVelocity) * 22 * (0.72 + velocityFreshness * 0.28) + recencyBoost(dish.created_at) * 0.5 + statusBoost);
   const cuisine = dish.cuisine?.toLowerCase().trim() ?? "";
   const cuisineHistory = cuisine ? userSignals.cuisineRatings.get(cuisine) : undefined;
-  const cuisineAffinity = cuisineHistory ? clamp(((cuisineHistory.total / cuisineHistory.count) / 5) * 80 + Math.min(20, cuisineHistory.count * 4)) : 0;
-  const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 28 : 0;
-  const savedCuisineAffinity = cuisine ? Math.min(28, (userSignals.savedCuisines.get(cuisine) ?? 0) * 7) : 0;
+  const cuisineAffinity = cuisineHistory ? clamp(((cuisineHistory.total / cuisineHistory.count) / 5) * 74 + Math.min(26, cuisineHistory.count * 5)) : 0;
+  const statedPreference = cuisine && userSignals.preferredCuisines.has(cuisine) ? 36 : 0;
+  const savedCuisineAffinity = cuisine ? Math.min(32, (userSignals.savedCuisines.get(cuisine) ?? 0) * 8) : 0;
   const tagAffinity = Math.min(34, dishTags.reduce((sum, tag) => sum + (userSignals.affinityTags.get(tag.toLowerCase().trim()) ?? 0), 0) * 5);
-  const alreadySavedPenalty = userSignals.savedDishIds.has(dish.id) ? -12 : 0;
+  const alreadySavedPenalty = userSignals.savedDishIds.has(dish.id) ? -10 : 0;
   const personalizationScore = clamp(cuisineAffinity + statedPreference + savedCuisineAffinity + tagAffinity + alreadySavedPenalty);
   const score = qualityScore * weights.quality + popularityScore * weights.popularity + trendingScore * weights.trending + personalizationScore * weights.personalization;
   return { score, qualityScore, popularityScore, trendingScore, personalizationScore };
@@ -338,14 +341,14 @@ serve(async (req) => {
       const restaurant = dish.restaurant_id ? restaurantsById.get(dish.restaurant_id) ?? null : null;
       const distance = origin ? distanceMiles(origin, restaurant) : null;
       const itemTags = tagsByDishId.get(dish.id) ?? [];
-      const scoreParts = scoreDish(dish, itemTags, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights);
+      const trend = trendByDishId.get(dish.id);
+      const scoreParts = scoreDish(dish, itemTags, recentByDishId.get(dish.id) ?? { ratings: 0, wantToTry: 0, favorites: 0, saves: 0 }, userSignals, rankingWeights, trend);
       const score = input.mode === "nearby" && distance != null
         ? scoreParts.score - distance * 2
         : input.mode === "recent"
           ? recencyBoost(dish.created_at) + scoreParts.score * 0.35
           : scoreParts.score;
       const photo = photosByDishId.get(dish.id);
-      const trend = trendByDishId.get(dish.id);
       const trendStatus = trend?.status === "viral" || scoreParts.trendingScore >= 80 ? "viral" : trend?.status === "trending" || scoreParts.trendingScore >= 45 ? "trending" : "normal";
       const trendLabels = [trendStatus === "viral" ? "Viral" : trendStatus === "trending" ? "Trending" : null, trend?.is_hot_nearby && input.mode === "nearby" ? "Hot near you" : null].filter(Boolean);
       return {
