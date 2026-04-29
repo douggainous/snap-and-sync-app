@@ -35,7 +35,7 @@ import demoPlatedNoodles from "@/assets/demo-plated-noodles.jpg";
 import demoCrispyTacos from "@/assets/demo-crispy-tacos.jpg";
 import demoBistroPlate from "@/assets/demo-bistro-plate.jpg";
 import demoDessertGelato from "@/assets/demo-dessert-gelato.jpg";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -48,12 +48,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 type View = "discover" | "scan" | "favorites" | "profile";
-type UserSession = { id: string; email?: string } | null;
+type UserSession = AppUser | null;
 type Restaurant = {
   id?: string;
   name: string;
@@ -362,7 +363,7 @@ const Index = () => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const photoLibraryInputRef = useRef<HTMLInputElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
-  const [sessionUser, setSessionUser] = useState<UserSession>(null);
+  const { user: sessionUser, signOut } = useAuthSession();
   const [authPrompt, setAuthPrompt] = useState<string | null>(null);
   const [view, setView] = useState<View>("discover");
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
@@ -384,12 +385,6 @@ const Index = () => {
   const selectedSlug = location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? (selectedSlug ? sampleItems.find((item) => item.slug === selectedSlug) : null), [items, selectedSlug]);
-
-  useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => setSessionUser(session?.user ? { id: session.user.id, email: session.user.email ?? undefined } : null));
-    supabase.auth.getSession().then(({ data }) => setSessionUser(data.session?.user ? { id: data.session.user.id, email: data.session.user.email ?? undefined } : null));
-    return () => sub.subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     const title = selectedItem ? `${selectedItem.name} near me | ${selectedItem.aggregate_rating}★ menu item reviews` : `${query || "Best food"} near me | Menu item ratings and prices`;
@@ -596,7 +591,7 @@ const Index = () => {
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-3 py-3 md:px-6">
           <a href="/" className="flex items-center gap-2 font-display text-2xl font-black"><ChefHat className="text-accent" />PlateLoop</a>
           <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-2xl"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search pork belly bao taco, fish tacos, ramen…" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition hover:bg-secondary hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-4" /></button></form>
-          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
+          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSignOut={signOut} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn />Sign in</Button>}
         </div>
       </header>
 
@@ -657,25 +652,26 @@ const Index = () => {
   );
 };
 
-const AccountMenu = ({ sessionUser, onSelectView }: { sessionUser: NonNullable<UserSession>; onSelectView: (view: View) => void }) => {
-  const initial = sessionUser.email?.trim().charAt(0).toUpperCase() || "U";
+const AccountMenu = ({ sessionUser, onSelectView, onSignOut }: { sessionUser: NonNullable<UserSession>; onSelectView: (view: View) => void; onSignOut: () => Promise<unknown> }) => {
+  const initial = (sessionUser.displayName ?? sessionUser.email)?.trim().charAt(0).toUpperCase() || "U";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button type="button" className="rounded-full outline-none ring-offset-background transition hover:scale-105 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" aria-label="Open account menu">
           <Avatar className="size-10 border border-primary/30 shadow-[var(--shadow-soft)]">
-            <AvatarFallback className="bg-gradient-to-br from-accent via-primary to-destructive text-sm font-black text-primary-foreground"><User className="size-4" /><span className="sr-only">{initial}</span></AvatarFallback>
+            {sessionUser.avatarUrl && <AvatarImage src={sessionUser.avatarUrl} alt={sessionUser.displayName ?? sessionUser.email ?? "Account"} />}
+            <AvatarFallback className="bg-gradient-to-br from-accent via-primary to-destructive text-sm font-black text-primary-foreground">{initial}</AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="truncate">{sessionUser.email || "Signed in"}</DropdownMenuLabel>
+        <DropdownMenuLabel className="truncate">{sessionUser.displayName || sessionUser.email || "Signed in"}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => onSelectView("profile")}><User className="mr-2 size-4" />Profile</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSelectView("favorites")}><Bookmark className="mr-2 size-4" />Favorites</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onSelectView("profile")}><MessageSquareText className="mr-2 size-4" />Reviews</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => supabase.auth.signOut()}><LogOut className="mr-2 size-4" />Sign out</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => { void onSignOut(); }}><LogOut className="mr-2 size-4" />Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
