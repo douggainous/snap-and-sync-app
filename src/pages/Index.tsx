@@ -94,6 +94,8 @@ type MenuItem = {
   photo_count: number;
   want_to_try_count?: number;
   favorite_count?: number;
+  user_want_to_try?: boolean;
+  user_favorite?: boolean;
   cover_image_url?: string | null;
   restaurants?: Restaurant | null;
 };
@@ -264,7 +266,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   );
 };
 
-const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite") => void }) => {
+const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onSave: (item: MenuItem) => void; onFirstReview?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const shareItem = async () => {
     const url = menuItemUrl(item.slug);
@@ -293,8 +295,8 @@ const FeedItemCard = ({ item, userLocation, onSave, onFirstReview, onDishAction 
         <div className="flex flex-wrap gap-2">{item.tags.slice(0, 6).map((tag) => <span key={tag} className="rounded-full border bg-background px-3 py-1 text-xs font-bold">{tag}</span>)}</div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {item.review_count > 0 ? <Button size="sm" asChild><a href={`/items/${item.slug}`}><Star />Review</a></Button> : <Button size="sm" onClick={() => onFirstReview?.(item)}><Star />Be first to review this!</Button>}
-          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "want_to_try")}><Bookmark />Want to try {item.want_to_try_count ? `· ${item.want_to_try_count}` : ""}</Button>
-          <Button variant="outline" size="sm" onClick={() => onDishAction?.(item, "favorite")}><Heart />Favorite {item.favorite_count ? `· ${item.favorite_count}` : ""}</Button>
+          <Button variant={item.user_want_to_try ? "default" : "outline"} size="sm" onClick={() => onDishAction?.(item, "want_to_try", !item.user_want_to_try)}><Bookmark />Want to try {item.want_to_try_count ? `· ${item.want_to_try_count}` : ""}</Button>
+          <Button variant={item.user_favorite ? "default" : "outline"} size="sm" onClick={() => onDishAction?.(item, "favorite", !item.user_favorite)}><Heart />Favorite {item.favorite_count ? `· ${item.favorite_count}` : ""}</Button>
           <Button asChild variant="outline" size="sm"><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button>
           <Button variant="outline" size="sm" onClick={shareItem}><Share2 />Share</Button>
         </div>
