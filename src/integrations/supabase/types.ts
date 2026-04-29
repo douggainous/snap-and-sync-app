@@ -14,6 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
+      collection_dishes: {
+        Row: {
+          collection_id: string
+          created_at: string
+          dish_id: string
+          id: string
+          note: string | null
+          sort_order: number
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          dish_id: string
+          id?: string
+          note?: string | null
+          sort_order?: number
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          dish_id?: string
+          id?: string
+          note?: string | null
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_dishes_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      collections: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_public: boolean
+          name: string
+          slug: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       dish_share_events: {
         Row: {
           created_at: string
