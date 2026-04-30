@@ -1,21 +1,22 @@
-I found why the app is not working: the current preview is blocked by TypeScript build errors in `src/pages/Index.tsx`, so the app cannot compile and render.
+I’ll simplify the main feed layout so it feels more like a clean, card-first feed.
 
-Plan to fix it:
+Planned changes:
 
-1. Fix the public list card prop mismatch
-   - `PublicListPage` renders `ItemCard` with an old `onSave` prop.
-   - `ItemCard` now maps to `FeedItemCard`, which expects `onAddToList` instead.
-   - Update that render to pass `onAddToList={onSave}` so public list cards open the collection/list modal correctly.
+1. Remove the top header bar
+- Delete the sticky PlateLoop/search/sign-in header from the top of the app.
+- Adjust the main content spacing so the feed starts at the top naturally without leaving a header-sized gap.
+- Update the desktop side navigation sticky offset so it no longer accounts for the removed header.
 
-2. Fix the malformed collections select query
-   - The current `collections` query has an extra closing parenthesis:
-     `collection_dishes(dishes(...)))`
-   - Correct it to a valid nested select:
-     `collection_dishes(dishes(...))`
-   - This removes the parser error that TypeScript is surfacing.
+2. Remove the “Discover” title above the feed
+- Remove the “Discover” word/title row from the discover feed.
+- Keep the loading behavior, but move the loading spinner into the feed area only if needed so the page doesn’t reintroduce a visible heading bar.
 
-3. Verify the app compiles through the preview
-   - After the small code fix, reload the preview and confirm the build-error overlay is gone.
-   - Check that the Discover page renders, and that list-related actions still open the collection modal as intended.
+3. Keep sign-in inside the Account tab
+- The Account tab already shows a sign-in card when the user is logged out.
+- I’ll leave sign-in access there and remove the separate top-header sign-in button.
+- Existing protected actions like saving, reviewing, or creating lists will still prompt sign-in when needed.
 
-No database changes are needed for this fix.
+Technical details:
+- Primary file to update: `src/pages/Index.tsx`.
+- No database changes needed.
+- No authentication logic changes needed; this is a layout/navigation cleanup only.
