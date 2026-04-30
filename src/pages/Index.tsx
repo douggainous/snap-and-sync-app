@@ -756,11 +756,13 @@ const Index = () => {
   const pullRefreshFood = pullRefreshFoods[pullFoodIndex % pullRefreshFoods.length];
   const refreshDiscoverFeed = useCallback(async () => {
     setPullRefreshing(true);
-    setPullFoodIndex((index) => index + 1);
     try {
       await loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
     } finally {
-      window.setTimeout(() => setPullRefreshing(false), 420);
+      window.setTimeout(() => {
+        setPullRefreshing(false);
+        setPullFoodIndex((index) => index + 1);
+      }, 420);
     }
   }, [loadItems, userLocation]);
   const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => {
