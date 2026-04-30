@@ -423,6 +423,7 @@ const Index = () => {
   const pullStartYRef = useRef<number | null>(null);
   const pullDistanceRef = useRef(0);
   const pullArmedRef = useRef(false);
+  const pullPointerIdRef = useRef<number | null>(null);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
@@ -785,13 +786,15 @@ const Index = () => {
     pullDistanceRef.current = distance;
     setPullDistance(distance);
   };
+  const isAtFeedTop = () => (document.scrollingElement?.scrollTop ?? window.scrollY) <= 8;
   const startFeedPull = (clientY: number) => {
-    if (view !== "discover" || selectedItem || listSlug || loading || pullRefreshing || window.scrollY > 2) return;
+    if (view !== "discover" || selectedItem || listSlug || loading || pullRefreshing || !isAtFeedTop()) return;
     pullStartYRef.current = clientY;
     pullArmedRef.current = true;
   };
   const moveFeedPull = (clientY: number) => {
     if (!pullArmedRef.current || pullStartYRef.current === null) return;
+    if (!isAtFeedTop() && pullDistanceRef.current <= 0) return cancelFeedPull();
     const distance = clientY - pullStartYRef.current;
     if (distance <= 0) return setPullOffset(0);
     setPullOffset(Math.min(128, distance * 0.58));
@@ -800,6 +803,8 @@ const Index = () => {
     const shouldRefresh = pullDistanceRef.current >= 72;
     pullStartYRef.current = null;
     pullArmedRef.current = false;
+    pullPointerIdRef.current = null;
+    pullPointerIdRef.current = null;
     setPullOffset(shouldRefresh ? 84 : 0);
     if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullOffset(0));
   };
@@ -809,14 +814,29 @@ const Index = () => {
     setPullOffset(0);
   };
   const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => startFeedPull(event.touches[0]?.clientY ?? 0);
-  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => moveFeedPull(event.touches[0]?.clientY ?? pullStartYRef.current ?? 0);
+  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    moveFeedPull(event.touches[0]?.clientY ?? pullStartYRef.current ?? 0);
+    if (pullDistanceRef.current > 0 && event.cancelable) event.preventDefault();
+  };
   const onFeedPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     startFeedPull(event.clientY);
+    if (pullArmedRef.current) {
+      pullPointerIdRef.current = event.pointerId;
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    }
   };
-  const onFeedPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => moveFeedPull(event.clientY);
+  const onFeedPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pullPointerIdRef.current !== null && event.pointerId !== pullPointerIdRef.current) return;
+    moveFeedPull(event.clientY);
+    if (pullDistanceRef.current > 0) event.preventDefault();
+  };
   const onFeedTouchEnd = () => endFeedPull();
-  const onFeedPointerUp = () => endFeedPull();
+  const onFeedPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pullPointerIdRef.current !== null && event.pointerId !== pullPointerIdRef.current) return;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    endFeedPull();
+  };
   const onFeedTouchCancel = () => cancelFeedPull();
   const onFeedPointerCancel = () => cancelFeedPull();
 
@@ -840,7 +860,7 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              {loading && !pullRefreshing ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="relative min-w-0 max-w-full touch-pan-y select-none" onTouchStart={onFeedTouchStart} onTouchMove={onFeedTouchMove} onTouchEnd={onFeedTouchEnd} onTouchCancel={onFeedTouchCancel} onPointerDown={onFeedPointerDown} onPointerMove={onFeedPointerMove} onPointerUp={onFeedPointerUp} onPointerCancel={onFeedPointerCancel} onPointerLeave={onFeedPointerCancel}><PullRefreshPeek food={pullRefreshFood} distance={pullDistance} refreshing={pullRefreshing} /><div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2 transition-transform duration-300 ease-out" style={{ transform: `translateY(${pullRefreshing ? 34 : Math.min(pullDistance, 84)}px)` }}>{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div></div>}
+              {loading && !pullRefreshing ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="relative min-w-0 max-w-full select-none overscroll-contain" onTouchStart={onFeedTouchStart} onTouchMove={onFeedTouchMove} onTouchEnd={onFeedTouchEnd} onTouchCancel={onFeedTouchCancel} onPointerDown={onFeedPointerDown} onPointerMove={onFeedPointerMove} onPointerUp={onFeedPointerUp} onPointerCancel={onFeedPointerCancel}><PullRefreshPeek food={pullRefreshFood} distance={pullDistance} refreshing={pullRefreshing} /><div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2 transition-transform duration-300 ease-out" style={{ transform: `translateY(${pullRefreshing ? 34 : Math.min(pullDistance, 84)}px)` }}>{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div></div>}
             </>
           )}
 
@@ -947,7 +967,8 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
     <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
       <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
         {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover animate-scale-in" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-foreground/28 to-foreground/24" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/48 to-foreground/18" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background via-background/40 to-transparent" />
         <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)]"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={goBack} aria-label="Back to feed"><ArrowLeft className="size-5" /></Button><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
         <div className="absolute inset-x-0 bottom-0 space-y-4 p-4 pb-24 md:p-7 md:pb-10">
           <div className="flex min-w-0 flex-wrap gap-2"><SponsoredDisclosure item={item} />{labels.length ? labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>) : !item.is_sponsored && <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}</div>
