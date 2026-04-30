@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, ImgHTMLAttributes, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, ImgHTMLAttributes, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -511,6 +511,12 @@ const Index = () => {
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
+
+  useLayoutEffect(() => {
+    if (!selectedSlug || listSlug) return;
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [selectedSlug, listSlug]);
 
   useEffect(() => {
     if (selectedSlug || listSlug) return;
