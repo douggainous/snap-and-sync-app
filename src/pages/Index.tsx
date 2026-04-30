@@ -756,7 +756,7 @@ const Index = () => {
           <nav className="sticky top-6 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
-        <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 lg:px-0">
+        <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 pt-3 lg:px-0 lg:pt-0">
           {searchPanelOpen && (
             <div className={cn("z-40 max-w-full rounded-3xl glass-surface p-3 lg:hidden", selectedItem ? "relative w-full" : "fixed inset-x-3 bottom-[88px] max-w-[calc(100vw-1.5rem)]")}>
               <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-text-secondary" /><Input autoFocus className="h-12 rounded-full bg-secondary/80 pl-10 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2 rounded-full" aria-label="Search"><Search className="size-4" /></Button></form>
