@@ -332,27 +332,26 @@ const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item:
   };
 
   return (
-    <article className="feed-reel group overflow-hidden rounded-[28px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.99]">
-      <a href={`/dish/${item.slug}`} className="block" aria-label={`View details for ${item.name}`}>
-        <div className="image-skeleton relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
+    <article className="feed-reel group overflow-hidden rounded-[32px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/45 transition duration-200 active:scale-[0.99]">
+      <div className="image-skeleton relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
+        <a href={`/dish/${item.slug}`} className="absolute inset-0 block" aria-label={`View details for ${item.name}`}>
           {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" loading="lazy" decoding="async" sizes="(min-width: 1024px) 760px, 100vw" width={760} height={950} /> : <div className="flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-20 opacity-50" /></div>}
-          <div className="absolute inset-0 bg-gradient-to-t from-foreground/88 via-foreground/26 to-transparent" />
-          <div className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.slice(0, 1).map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
-          <div className="absolute inset-x-0 bottom-0 p-4 text-text-inverse sm:p-5">
-            <p className="mb-2 inline-flex max-w-full items-center gap-1 rounded-full bg-foreground/82 px-3 py-1 text-[11px] font-black backdrop-blur-md"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
-            <h2 className="break-words font-display text-3xl font-black leading-none sm:text-4xl">{item.name}</h2>
+        </a>
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/34 to-transparent" />
+        <div className="absolute left-4 top-4 flex max-w-[calc(100%-8rem)] flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.slice(0, 1).map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
+        <div className="absolute right-4 top-4 flex flex-col gap-3">
+          <button type="button" className={cn("thumb-action save-pop size-14 bg-card/92", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onPointerDown={startLongPress} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress} onClick={quickWantToTry} aria-label="Want to try. Hold to choose a list"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button>
+          <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-5" /></button>
+          <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-5" /></button>
+        </div>
+        <a href={`/dish/${item.slug}`} className="absolute inset-x-0 bottom-0 block p-5 text-text-inverse sm:p-6">
+          <div className="max-w-[calc(100%-1rem)] sm:max-w-[72%]">
+            <p className="mb-3 inline-flex max-w-full items-center gap-1.5 rounded-full bg-card/16 px-3 py-1 text-[11px] font-black backdrop-blur-md ring-1 ring-card/20"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
+            <h2 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">{item.name}</h2>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm font-bold text-text-inverse/90"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span>{item.cuisine && <><span>·</span><span>{item.cuisine}</span></>}</div>
+            {item.tags.length > 0 && <div className="mt-3 flex max-w-full gap-2 overflow-hidden">{item.tags.slice(0, 3).map((tag) => <span key={tag} className="inline-flex shrink-0 rounded-full bg-card/16 px-3 py-1 text-[11px] font-black text-text-inverse backdrop-blur-md ring-1 ring-card/20">{tag}</span>)}</div>}
           </div>
-        </div>
-      </a>
-      <div className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:p-5">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-secondary"><span>{formatPrice(item)}</span><span>·</span><span>{item.review_count} reviews</span>{item.cuisine && <><span>·</span><span>{item.cuisine}</span></>}</div>
-          {item.tags.length > 0 && <div className="mt-2 flex max-w-full gap-2 overflow-hidden">{item.tags.slice(0, 3).map((tag) => <span key={tag} className="soft-chip shrink-0 px-2.5 py-0.5 text-[11px]">{tag}</span>)}</div>}
-        </div>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:w-72">
-          <button type="button" className={cn("inline-flex h-11 min-w-0 items-center justify-center gap-2 rounded-full border border-border/70 bg-secondary px-3 text-sm font-black text-foreground transition active:scale-95", item.user_want_to_try && "bg-accent text-accent-foreground")} onPointerDown={startLongPress} onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress} onClick={quickWantToTry} aria-label="Want to try. Hold to choose a list"><Bookmark className={cn("size-4 shrink-0", item.user_want_to_try && "fill-current")} /><span className="truncate">Want to try</span></button>
-          <button type="button" className="inline-flex size-11 items-center justify-center rounded-full border border-border/70 bg-secondary text-foreground transition active:scale-95" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button>
-        </div>
+        </a>
       </div>
     </article>
   );
@@ -777,7 +776,7 @@ const Index = () => {
           {view === "discover" && !selectedItem && !listSlug && (
             <>
               <div className="flex items-center justify-between px-1 pt-1"><h1 className="font-display text-2xl font-black">Discover</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
-              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
             </>
           )}
 
@@ -798,7 +797,7 @@ const Index = () => {
               </div>}
               {feedMode === "nearby" && <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />}
               <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Search"}</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
-              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Try another search or capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div>}
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Try another search or capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="col-span-full flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "More dishes loading" : "You’re caught up"}</div></div>}
             </>
           )}
 
