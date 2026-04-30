@@ -1162,7 +1162,7 @@ const PublicListPage = ({ slug, userLocation, onSave }: { slug: string; userLoca
     });
   }, [slug]);
   if (!list) return <section className="rounded-lg border bg-card p-5"><h1 className="font-display text-4xl font-black">List not found</h1><p className="text-text-secondary">This favorites list may be private or unavailable.</p></section>;
-  return <section className="space-y-5"><div className="rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><p className="text-sm font-black text-primary">{list.is_public ? "Public food list" : "Private food list"}</p><h1 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">{list.title}</h1>{list.description && <p className="mt-3 text-text-secondary">{list.description}</p>}<Button className="mt-4" variant="outline" onClick={() => navigator.share?.({ title: list.title, url: listUrl(list.slug) }) ?? navigator.clipboard.writeText(listUrl(list.slug))}><Share2 />Share list</Button></div><div className="space-y-4">{list.items.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onSave={onSave} />)}</div></section>;
+  return <section className="space-y-5"><div className="rounded-lg border bg-card p-5 shadow-[var(--shadow-editorial)]"><p className="text-sm font-black text-primary">{list.is_public ? "Public food list" : "Private food list"}</p><h1 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">{list.title}</h1>{list.description && <p className="mt-3 text-text-secondary">{list.description}</p>}<Button className="mt-4" variant="outline" onClick={() => navigator.share?.({ title: list.title, url: listUrl(list.slug) }) ?? navigator.clipboard.writeText(listUrl(list.slug))}><Share2 />Share list</Button></div><div className="space-y-4">{list.items.map((item) => <ItemCard key={item.id} item={item} userLocation={userLocation} onAddToList={onSave} />)}</div></section>;
 };
 
 const ShareableLists = ({ sessionUser, onProtected }: { sessionUser: UserSession; onProtected: (message: string) => void }) => {
@@ -1211,19 +1211,20 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
       supabase.from("saved_items").select("dish_id,action_type,updated_at,created_at").eq("user_id", sessionUser.id).in("action_type", ["favorite", "want_to_try"]).order("updated_at", { ascending: false }).limit(30),
       supabase.from("ratings").select("dish_id,rating,updated_at,created_at").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(18),
       withTimeout(supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }), 8000, "Want-to-try").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Want-to-try timed out." }, error: null })),
-      supabaseAny.from("collections").select("id,name,description,slug,is_public,cover_image_url,collection_dishes(dishes(id,name,slug,cuisine,section,aggregate_rating,review_count)))").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(12),
+      supabaseAny.from("collections").select("id,name,description,slug,is_public,cover_image_url,collection_dishes(dishes(id,name,slug,cuisine,section,aggregate_rating,review_count))").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(12),
     ]).then(async ([savedResult, ratingsResult, wantToTryResult, collectionsResult]) => {
       if (!wantToTryResult.error && !wantToTryResult.data?.error) setWantToTryPlan((wantToTryResult.data?.dishes ?? []) as WantToTryDish[]);
       else setWantToTryPlan([]);
       const savedRows = (savedResult.data ?? []) as SavedActionRow[];
       const ratingRows = (ratingsResult.data ?? []) as RatingActionRow[];
       const dishIds = Array.from(new Set([...savedRows.map((row) => row.dish_id), ...ratingRows.map((row) => row.dish_id)].filter(Boolean)));
-      const collectionRows = (collectionsResult.data ?? []) as Array<Collection & { collection_dishes?: Array<{ dishes?: DashboardDish | null }> }>;
-      const collectionDishIds = Array.from(new Set(collectionRows.flatMap((collection) => (collection.collection_dishes ?? []).map((row) => row.dishes?.id).filter(Boolean) as string[])));
+      const collectionRows = (collectionsResult.data ?? []) as unknown as Array<Collection & { collection_dishes?: Array<{ dishes?: DashboardDish | DashboardDish[] | null }> }>;
+      const getCollectionDish = (row: { dishes?: DashboardDish | DashboardDish[] | null }) => Array.isArray(row.dishes) ? row.dishes[0] : row.dishes;
+      const collectionDishIds = Array.from(new Set(collectionRows.flatMap((collection) => (collection.collection_dishes ?? []).map((row) => getCollectionDish(row)?.id).filter(Boolean) as string[])));
       if (collectionDishIds.length) {
         const { data: collectionPhotos } = await supabase.from("photos").select("dish_id,image_url").in("dish_id", collectionDishIds).eq("is_public", true).order("created_at", { ascending: false });
         const collectionPhotoByDish = new Map((collectionPhotos ?? []).filter((photo) => photo.image_url).map((photo) => [photo.dish_id, photo.image_url]));
-        setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: (collection.collection_dishes ?? []).map((row) => row.dishes).filter(Boolean).slice(0, 6).map((dish) => ({ ...dish!, cover_image_url: collectionPhotoByDish.get(dish!.id) ?? null })) })));
+        setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: (collection.collection_dishes ?? []).map(getCollectionDish).filter(Boolean).slice(0, 6).map((dish) => ({ ...dish!, cover_image_url: collectionPhotoByDish.get(dish!.id) ?? null })) })));
       } else setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: [] })));
       if (!dishIds.length) { setFavorites([]); setWantToTry([]); setRecentRated([]); setLoading(false); return; }
       const { data: dishRows } = await supabase.from("dishes").select("id,name,slug,cuisine,section,aggregate_rating,review_count,restaurant_id").in("id", dishIds).eq("is_published", true);
