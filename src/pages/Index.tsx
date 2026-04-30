@@ -840,8 +840,45 @@ const Index = () => {
   const onFeedTouchCancel = () => cancelFeedPull();
   const onFeedPointerCancel = () => cancelFeedPull();
 
+  useEffect(() => {
+    if (view !== "discover" || selectedItem || listSlug) return;
+    const previousOverscroll = document.documentElement.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = "contain";
+
+    const handleTouchStart = (event: globalThis.TouchEvent) => {
+      if (loading || pullRefreshing || !isAtFeedTop()) return;
+      startFeedPull(event.touches[0]?.clientY ?? 0);
+    };
+    const handleTouchMove = (event: globalThis.TouchEvent) => {
+      if (!pullArmedRef.current || pullStartYRef.current === null) return;
+      const clientY = event.touches[0]?.clientY ?? pullStartYRef.current;
+      const distance = clientY - pullStartYRef.current;
+      if (distance > 0 && isAtFeedTop()) {
+        event.preventDefault();
+        moveFeedPull(clientY);
+      } else {
+        moveFeedPull(clientY);
+      }
+    };
+    const handleTouchEnd = () => {
+      if (pullArmedRef.current || pullDistanceRef.current > 0) endFeedPull();
+    };
+
+    document.addEventListener("touchstart", handleTouchStart, { passive: true });
+    document.addEventListener("touchmove", handleTouchMove, { passive: false });
+    document.addEventListener("touchend", handleTouchEnd);
+    document.addEventListener("touchcancel", handleTouchEnd);
+    return () => {
+      document.documentElement.style.overscrollBehaviorY = previousOverscroll;
+      document.removeEventListener("touchstart", handleTouchStart);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("touchcancel", handleTouchEnd);
+    };
+  }, [view, selectedItem, listSlug, loading, pullRefreshing]);
+
   return (
-    <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
+    <main className="min-h-screen w-full max-w-full overflow-x-hidden overscroll-y-contain bg-background pb-28 text-foreground md:pb-8">
       {authPrompt && <Suspense fallback={null}><AuthModal prompt={authPrompt} onClose={() => setAuthPrompt(null)} /></Suspense>}
       {favoriteTarget && <SaveToCollectionModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
       <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 pb-3 pt-0 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
