@@ -2,8 +2,10 @@ import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Po
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
+  ArrowLeft,
   Bookmark,
   Camera as CameraIcon,
+  CalendarCheck,
   ChefHat,
   Clock,
   Compass,
@@ -25,6 +27,9 @@ import {
   Share2,
   Sparkles,
   Star,
+  Store,
+  Truck,
+  Utensils,
   Upload,
   User,
   Globe,
