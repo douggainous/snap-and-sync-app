@@ -875,7 +875,7 @@ const Index = () => {
       document.removeEventListener("touchend", handleTouchEnd);
       document.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [view, selectedItem, listSlug, loading, pullRefreshing]);
+  }, [view, selectedItem, listSlug, loading, pullRefreshing, startFeedPull, moveFeedPull, endFeedPull]);
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden overscroll-y-contain bg-background pb-28 text-foreground md:pb-8">
