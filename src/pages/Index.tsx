@@ -766,29 +766,44 @@ const Index = () => {
       }, 420);
     }
   }, [loadItems, userLocation]);
-  const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+  const setPullOffset = (distance: number) => {
+    pullDistanceRef.current = distance;
+    setPullDistance(distance);
+  };
+  const startFeedPull = (clientY: number) => {
     if (view !== "discover" || selectedItem || listSlug || loading || pullRefreshing || window.scrollY > 2) return;
-    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+    pullStartYRef.current = clientY;
     pullArmedRef.current = true;
   };
-  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+  const moveFeedPull = (clientY: number) => {
     if (!pullArmedRef.current || pullStartYRef.current === null) return;
-    const distance = (event.touches[0]?.clientY ?? pullStartYRef.current) - pullStartYRef.current;
-    if (distance <= 0) return setPullDistance(0);
-    setPullDistance(Math.min(128, distance * 0.58));
+    const distance = clientY - pullStartYRef.current;
+    if (distance <= 0) return setPullOffset(0);
+    setPullOffset(Math.min(128, distance * 0.58));
   };
-  const onFeedTouchEnd = () => {
-    const shouldRefresh = pullDistance >= 72;
+  const endFeedPull = () => {
+    const shouldRefresh = pullDistanceRef.current >= 72;
     pullStartYRef.current = null;
     pullArmedRef.current = false;
-    setPullDistance(shouldRefresh ? 84 : 0);
-    if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullDistance(0));
+    setPullOffset(shouldRefresh ? 84 : 0);
+    if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullOffset(0));
   };
-  const onFeedTouchCancel = () => {
+  const cancelFeedPull = () => {
     pullStartYRef.current = null;
     pullArmedRef.current = false;
-    setPullDistance(0);
+    setPullOffset(0);
   };
+  const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => startFeedPull(event.touches[0]?.clientY ?? 0);
+  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => moveFeedPull(event.touches[0]?.clientY ?? pullStartYRef.current ?? 0);
+  const onFeedPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    startFeedPull(event.clientY);
+  };
+  const onFeedPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => moveFeedPull(event.clientY);
+  const onFeedTouchEnd = () => endFeedPull();
+  const onFeedPointerUp = () => endFeedPull();
+  const onFeedTouchCancel = () => cancelFeedPull();
+  const onFeedPointerCancel = () => cancelFeedPull();
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
