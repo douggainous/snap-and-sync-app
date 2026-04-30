@@ -850,6 +850,8 @@ const Index = () => {
             </>
           )}
 
+          {selectedSlug && !selectedItem && !listSlug && (loading ? <DishDetailLoader /> : <FeedErrorState message={feedError ?? "Dish not found."} onRetry={() => navigate("/")} />)}
+
           {selectedItem && !listSlug && <><ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />{!sessionUser && !sharedDishNudgeDismissed && <GuestConversionNudge onClose={() => setSharedDishNudgeDismissed(true)} onSignIn={() => setAuthPrompt("Track your favorite meals")} />}</>}
 
           {view === "scan" && (
