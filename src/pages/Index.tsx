@@ -979,7 +979,7 @@ const Index = () => {
           <nav className="sticky top-6 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
-        <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 pt-3 lg:px-0 lg:pt-0">
+        <div key={`${view}-${location.pathname}`} className={cn("screen-enter min-w-0 max-w-full overflow-x-hidden", selectedItem && !listSlug ? "space-y-0 px-0 pt-0" : "space-y-4 px-3 pt-3 lg:px-0 lg:pt-0")}>
           {searchPanelOpen && (
             <div className={cn("z-40 max-w-full rounded-3xl glass-surface p-3 lg:hidden", selectedItem ? "relative w-full" : "fixed inset-x-3 bottom-[88px] max-w-[calc(100vw-1.5rem)]")}>
               <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-text-secondary" /><Input autoFocus className="h-12 rounded-full bg-secondary/80 pl-10 pr-24" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-12 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-5" /></button><Button type="submit" size="icon" className="absolute right-1 top-1/2 size-10 -translate-y-1/2 rounded-full" aria-label="Search"><Search className="size-4" /></Button></form>
@@ -1095,8 +1095,8 @@ const ItemDetail = ({ item, transitionImageUrl, userLocation, sessionUser, onPro
   const goBack = () => navigate("/");
   const heroImageUrl = item.cover_image_url || transitionImageUrl;
   return (
-    <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
-      <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
+    <section className="max-w-full space-y-0 overflow-visible">
+      <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px]">
         {heroImageUrl ? <StableImage src={heroImageUrl} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover detail-hero-image" loading="eager" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} draggable={false} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/48 to-foreground/18" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background/85 via-background/25 to-transparent" />
