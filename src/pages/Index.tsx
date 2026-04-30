@@ -751,17 +751,9 @@ const Index = () => {
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
       {authPrompt && <Suspense fallback={null}><AuthModal prompt={authPrompt} onClose={() => setAuthPrompt(null)} /></Suspense>}
       {favoriteTarget && <SaveToCollectionModal item={favoriteTarget} sessionUser={sessionUser} onClose={() => setFavoriteTarget(null)} onProtected={requireAuth} />}
-      <header className="sticky top-0 z-30 w-full max-w-full border-b border-border/50 bg-card/95 backdrop-blur-2xl">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2 px-4 py-3 md:gap-3 md:px-6">
-          <a href="/" className="flex min-w-0 flex-1 items-center gap-2 font-display text-lg font-black sm:text-xl md:flex-none"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground"><ChefHat className="size-5" /></span><span className="truncate">PlateLoop</span></a>
-          <form onSubmit={submitSearch} className="relative ml-auto hidden flex-1 md:block md:max-w-xl"><Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-text-secondary" /><Input className="h-11 rounded-full border-border/70 bg-secondary/70 pl-10 pr-12" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-1 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-text-secondary transition hover:bg-card hover:text-foreground" aria-label="Use my location"><LocateFixed className="size-4" /></button></form>
-          {sessionUser ? <AccountMenu sessionUser={sessionUser} onSignOut={signOut} onSelectView={(nextView) => { setView(nextView); navigate("/"); }} /> : <Button className="shrink-0 rounded-full px-3 sm:px-4" onClick={() => setAuthPrompt("Sign in only when you submit reviews or save favorites, lists, and history.")}><LogIn className="size-4" /><span className="whitespace-nowrap">Sign in</span></Button>}
-        </div>
-      </header>
-
       <section className="mx-auto grid w-full max-w-5xl min-w-0 gap-5 px-0 pb-3 pt-0 lg:grid-cols-[180px_minmax(0,1fr)] lg:px-6 lg:py-6">
         <aside className="hidden lg:block">
-          <nav className="sticky top-24 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }}><item.icon />{item.label}</Button>)}</nav>
+          <nav className="sticky top-6 space-y-2 rounded-3xl glass-surface p-2">{navItems.map((item) => <Button key={item.id} variant={view === item.id ? "default" : "ghost"} className="w-full justify-start rounded-full" onClick={() => { setView(item.id); navigate(item.id === "search" ? "/search" : "/"); }}><item.icon />{item.label}</Button>)}</nav>
         </aside>
 
         <div key={`${view}-${location.pathname}`} className="screen-enter min-w-0 max-w-full space-y-4 overflow-x-hidden px-3 lg:px-0">
@@ -775,14 +767,13 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              <div className="flex items-center justify-between px-1 pt-1"><h1 className="font-display text-2xl font-black">Discover</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
               {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<div ref={loadMoreRef} className="flex min-h-20 items-center justify-center rounded-3xl border border-dashed bg-card/55 p-4 text-sm font-bold text-text-secondary">{loadingMore ? <><Loader2 className="mr-2 size-4 animate-spin text-primary" />Loading…</> : hasMoreItems ? "Scroll for more" : "You’re caught up"}</div></div>}
             </>
           )}
 
           {view === "search" && !selectedItem && !listSlug && (
             <>
-              <section className="relative z-10 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-b border-border/40 bg-background px-3 pb-3 pt-2 backdrop-blur-2xl lg:sticky lg:top-20 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border lg:bg-card/95 lg:py-3">
+              <section className="relative z-10 -mx-3 mb-3 max-w-[calc(100%+1.5rem)] space-y-3 overflow-hidden border-b border-border/40 bg-background px-3 pb-3 pt-2 backdrop-blur-2xl lg:sticky lg:top-6 lg:mx-0 lg:max-w-full lg:rounded-[28px] lg:border lg:bg-card/95 lg:py-3">
                 <form onSubmit={submitSearch} className="relative"><Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-text-secondary" /><Input className="h-14 rounded-full border-foreground/10 bg-secondary/70 pl-12 pr-12 text-lg font-black" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search dishes" /><button type="button" onClick={askLocation} className="absolute right-2 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-card/95 text-text-secondary" aria-label="Use my location"><LocateFixed className="size-5" /></button></form>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">{suggestedSearches.map((suggestion) => <button key={suggestion} type="button" onClick={() => applySearchSuggestion(suggestion)} className="soft-chip shrink-0 transition active:scale-95">{suggestion}</button>)}</div>
                 <div className="flex max-w-full min-w-0 flex-wrap gap-2 overflow-hidden pb-1">
