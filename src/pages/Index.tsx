@@ -804,13 +804,13 @@ const Index = () => {
     pullStartYRef.current = null;
     pullArmedRef.current = false;
     pullPointerIdRef.current = null;
-    pullPointerIdRef.current = null;
     setPullOffset(shouldRefresh ? 84 : 0);
     if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullOffset(0));
   };
   const cancelFeedPull = () => {
     pullStartYRef.current = null;
     pullArmedRef.current = false;
+    pullPointerIdRef.current = null;
     setPullOffset(0);
   };
   const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => startFeedPull(event.touches[0]?.clientY ?? 0);
