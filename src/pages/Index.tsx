@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, ImgHTMLAttributes, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -219,6 +219,88 @@ const suggestedSearches = ["Best steak near me", "Spicy ramen", "Crispy tacos", 
 const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha dessert"];
 const pullRefreshFoods = ["pizza", "steak", "burger", "taco"] as const;
 type PullRefreshFood = typeof pullRefreshFoods[number];
+
+const loadedImageUrls = new Set<string>();
+const pendingImageLoads = new Map<string, Promise<void>>();
+
+const preloadImage = (src?: string | null) => {
+  if (!src || loadedImageUrls.has(src)) return Promise.resolve();
+  const pending = pendingImageLoads.get(src);
+  if (pending) return pending;
+  const load = new Promise<void>((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      loadedImageUrls.add(src);
+      pendingImageLoads.delete(src);
+      resolve();
+    };
+    image.onerror = () => {
+      pendingImageLoads.delete(src);
+      resolve();
+    };
+    image.src = src;
+    void image.decode?.().then(() => {
+      loadedImageUrls.add(src);
+      pendingImageLoads.delete(src);
+      resolve();
+    }).catch(() => undefined);
+  });
+  pendingImageLoads.set(src, load);
+  return load;
+};
+
+type StableImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "alt" | "loading" | "decoding"> & {
+  src: string;
+  alt: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+};
+
+const StableImage = ({ src, alt, className, loading = "lazy", fetchPriority = "auto", onLoad, ...props }: StableImageProps) => {
+  const [displaySrc, setDisplaySrc] = useState(src);
+  const [loaded, setLoaded] = useState(() => loadedImageUrls.has(src));
+
+  useEffect(() => {
+    if (src === displaySrc) {
+      setLoaded(loadedImageUrls.has(src));
+      return;
+    }
+    if (loadedImageUrls.has(src)) {
+      setDisplaySrc(src);
+      setLoaded(true);
+      return;
+    }
+    let active = true;
+    setLoaded(false);
+    void preloadImage(src).then(() => {
+      if (!active) return;
+      setDisplaySrc(src);
+      setLoaded(true);
+    });
+    return () => { active = false; };
+  }, [displaySrc, src]);
+
+  return (
+    <>
+      {!loaded && <div className="pointer-events-none absolute inset-0 image-skeleton bg-secondary" aria-hidden="true" />}
+      <img
+        {...props}
+        src={displaySrc}
+        alt={alt}
+        className={cn(className, "transition-[opacity,transform] duration-500 ease-out", loaded ? "opacity-100" : "opacity-0")}
+        loading={loading}
+        decoding="async"
+        fetchPriority={fetchPriority}
+        onLoad={(event) => {
+          loadedImageUrls.add(displaySrc);
+          setLoaded(true);
+          onLoad?.(event);
+        }}
+      />
+    </>
+  );
+};
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
