@@ -499,6 +499,7 @@ const Index = () => {
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
+  const [transitionImageUrl, setTransitionImageUrl] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [pullFoodIndex, setPullFoodIndex] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -518,6 +519,10 @@ const Index = () => {
   }, [location.pathname, selectedSlug, listSlug]);
 
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
+
+  useEffect(() => {
+    items.slice(0, 5).forEach((item) => { void preloadImage(item.cover_image_url); });
+  }, [items]);
 
   useEffect(() => {
     if (selectedSlug || listSlug) feedRequestRef.current += 1;
@@ -852,6 +857,10 @@ const Index = () => {
   };
 
   const displayedItems = items;
+  const primeDishImage = useCallback((item: MenuItem) => {
+    setTransitionImageUrl(item.cover_image_url ?? null);
+    void preloadImage(item.cover_image_url);
+  }, []);
   const pullRefreshFood = pullRefreshFoods[pullFoodIndex % pullRefreshFoods.length];
   const refreshDiscoverFeed = useCallback(async () => {
     setPullRefreshing(true);
