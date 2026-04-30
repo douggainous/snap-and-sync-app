@@ -1218,12 +1218,13 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
       const savedRows = (savedResult.data ?? []) as SavedActionRow[];
       const ratingRows = (ratingsResult.data ?? []) as RatingActionRow[];
       const dishIds = Array.from(new Set([...savedRows.map((row) => row.dish_id), ...ratingRows.map((row) => row.dish_id)].filter(Boolean)));
-      const collectionRows = (collectionsResult.data ?? []) as Array<Collection & { collection_dishes?: Array<{ dishes?: DashboardDish | null }> }>;
-      const collectionDishIds = Array.from(new Set(collectionRows.flatMap((collection) => (collection.collection_dishes ?? []).map((row) => row.dishes?.id).filter(Boolean) as string[])));
+      const collectionRows = (collectionsResult.data ?? []) as unknown as Array<Collection & { collection_dishes?: Array<{ dishes?: DashboardDish | DashboardDish[] | null }> }>;
+      const getCollectionDish = (row: { dishes?: DashboardDish | DashboardDish[] | null }) => Array.isArray(row.dishes) ? row.dishes[0] : row.dishes;
+      const collectionDishIds = Array.from(new Set(collectionRows.flatMap((collection) => (collection.collection_dishes ?? []).map((row) => getCollectionDish(row)?.id).filter(Boolean) as string[])));
       if (collectionDishIds.length) {
         const { data: collectionPhotos } = await supabase.from("photos").select("dish_id,image_url").in("dish_id", collectionDishIds).eq("is_public", true).order("created_at", { ascending: false });
         const collectionPhotoByDish = new Map((collectionPhotos ?? []).filter((photo) => photo.image_url).map((photo) => [photo.dish_id, photo.image_url]));
-        setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: (collection.collection_dishes ?? []).map((row) => row.dishes).filter(Boolean).slice(0, 6).map((dish) => ({ ...dish!, cover_image_url: collectionPhotoByDish.get(dish!.id) ?? null })) })));
+        setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: (collection.collection_dishes ?? []).map(getCollectionDish).filter(Boolean).slice(0, 6).map((dish) => ({ ...dish!, cover_image_url: collectionPhotoByDish.get(dish!.id) ?? null })) })));
       } else setCollections(collectionRows.map((collection) => ({ ...collection, item_count: collection.collection_dishes?.length ?? 0, dishes: [] })));
       if (!dishIds.length) { setFavorites([]); setWantToTry([]); setRecentRated([]); setLoading(false); return; }
       const { data: dishRows } = await supabase.from("dishes").select("id,name,slug,cuisine,section,aggregate_rating,review_count,restaurant_id").in("id", dishIds).eq("is_published", true);
