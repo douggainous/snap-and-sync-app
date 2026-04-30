@@ -942,7 +942,7 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   };
   const labels = organicLabels(item);
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
-  const goBack = () => window.history.length > 1 ? navigate(-1) : navigate("/");
+  const goBack = () => navigate("/");
   return (
     <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
       <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
