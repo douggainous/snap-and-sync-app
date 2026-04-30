@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -205,6 +205,8 @@ const navItems = [
 
 const suggestedSearches = ["Best steak near me", "Spicy ramen", "Crispy tacos", "Sushi rolls"];
 const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha dessert"];
+const pullRefreshFoods = ["pizza", "steak", "burger", "taco"] as const;
+type PullRefreshFood = typeof pullRefreshFoods[number];
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
@@ -400,6 +402,11 @@ const Index = () => {
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullFoodIndex, setPullFoodIndex] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullArmedRef = useRef(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
@@ -746,6 +753,41 @@ const Index = () => {
   };
 
   const displayedItems = items;
+  const pullRefreshFood = pullRefreshFoods[pullFoodIndex % pullRefreshFoods.length];
+  const refreshDiscoverFeed = useCallback(async () => {
+    setPullRefreshing(true);
+    try {
+      await loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+    } finally {
+      window.setTimeout(() => {
+        setPullRefreshing(false);
+        setPullFoodIndex((index) => index + 1);
+      }, 420);
+    }
+  }, [loadItems, userLocation]);
+  const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (view !== "discover" || selectedItem || listSlug || loading || pullRefreshing || window.scrollY > 2) return;
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+    pullArmedRef.current = true;
+  };
+  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!pullArmedRef.current || pullStartYRef.current === null) return;
+    const distance = (event.touches[0]?.clientY ?? pullStartYRef.current) - pullStartYRef.current;
+    if (distance <= 0) return setPullDistance(0);
+    setPullDistance(Math.min(128, distance * 0.58));
+  };
+  const onFeedTouchEnd = () => {
+    const shouldRefresh = pullDistance >= 72;
+    pullStartYRef.current = null;
+    pullArmedRef.current = false;
+    setPullDistance(shouldRefresh ? 84 : 0);
+    if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullDistance(0));
+  };
+  const onFeedTouchCancel = () => {
+    pullStartYRef.current = null;
+    pullArmedRef.current = false;
+    setPullDistance(0);
+  };
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
@@ -767,7 +809,7 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2">{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div>}
+              {loading && !pullRefreshing ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="relative min-w-0 max-w-full" onTouchStart={onFeedTouchStart} onTouchMove={onFeedTouchMove} onTouchEnd={onFeedTouchEnd} onTouchCancel={onFeedTouchCancel}><PullRefreshPeek food={pullRefreshFood} distance={pullDistance} refreshing={pullRefreshing} /><div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2 transition-transform duration-300 ease-out" style={{ transform: `translateY(${pullRefreshing ? 34 : Math.min(pullDistance, 84)}px)` }}>{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div></div>}
             </>
           )}
 
@@ -893,6 +935,19 @@ const RelatedDishes = ({ tags, currentName }: { tags: string[]; currentName: str
 };
 
 const GuestConversionNudge = ({ onClose, onSignIn }: { onClose: () => void; onSignIn: () => void }) => <div className="fixed inset-x-3 bottom-20 z-20 mx-auto max-w-md rounded-lg border bg-card p-4 shadow-[var(--shadow-editorial)] lg:bottom-6"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="font-display text-xl font-black">Keep this dish handy</p><p className="mt-1 text-sm font-bold text-text-secondary">Save dishes you want to try and track your favorite meals.</p></div><Button size="icon" variant="ghost" className="shrink-0" onClick={onClose} aria-label="Dismiss"><X className="size-4" /></Button></div><div className="mt-3 flex gap-2"><Button className="flex-1 rounded-full" onClick={onSignIn}><Bookmark className="size-4" />Save later</Button><Button variant="outline" className="rounded-full" onClick={onClose}>Not now</Button></div></div>;
+
+const FoodPeekIllustration = ({ food }: { food: PullRefreshFood }) => {
+  if (food === "pizza") return <div className="relative size-28 rotate-[-10deg]"><div className="absolute left-4 top-2 h-24 w-20 rounded-b-[56px] rounded-t-lg bg-accent shadow-[var(--shadow-soft)] [clip-path:polygon(50%_0,100%_100%,0_100%)]" /><div className="absolute left-12 top-4 size-3 rounded-full bg-primary" /><div className="absolute left-9 top-11 size-3 rounded-full bg-destructive" /><div className="absolute left-16 top-14 size-3 rounded-full bg-primary" /><div className="absolute left-5 top-1 h-4 w-20 rounded-full bg-primary" /></div>;
+  if (food === "steak") return <div className="relative size-28 rotate-6"><div className="absolute inset-x-2 top-5 h-16 rounded-[48%] bg-primary shadow-[var(--shadow-soft)]" /><div className="absolute left-8 top-8 size-10 rounded-full bg-card/45" /><div className="absolute left-11 top-11 size-4 rounded-full bg-background" /><Sparkles className="absolute right-6 top-3 size-5 text-accent" /></div>;
+  if (food === "burger") return <div className="relative size-28"><div className="absolute left-4 top-3 h-10 w-20 rounded-t-full bg-accent shadow-[var(--shadow-soft)]" /><div className="absolute left-5 top-11 h-4 w-[4.5rem] rounded-full bg-primary" /><div className="absolute left-3 top-16 h-5 w-[5.25rem] rounded-full bg-destructive" /><div className="absolute left-5 top-[4.7rem] h-4 w-[4.75rem] rounded-b-full bg-accent" /><span className="absolute left-9 top-6 size-1.5 rounded-full bg-card" /><span className="absolute left-14 top-5 size-1.5 rounded-full bg-card" /></div>;
+  return <div className="relative size-28 rotate-[-8deg]"><div className="absolute left-5 top-3 h-20 w-20 rounded-full bg-accent shadow-[var(--shadow-soft)] [clip-path:polygon(50%_100%,0_0,100%_0)]" /><div className="absolute left-8 top-8 h-4 w-16 rounded-full bg-primary" /><div className="absolute left-10 top-5 size-3 rounded-full bg-destructive" /><div className="absolute left-16 top-6 size-3 rounded-full bg-card" /><Star className="absolute right-5 top-1 size-4 fill-current text-primary" /></div>;
+};
+
+const PullRefreshPeek = ({ food, distance, refreshing }: { food: PullRefreshFood; distance: number; refreshing: boolean }) => {
+  const visible = distance > 6 || refreshing;
+  const progress = Math.min(1, (refreshing ? 84 : distance) / 84);
+  return <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-0 justify-center overflow-visible" aria-hidden="true"><div className="origin-top transition-transform duration-300 ease-out" style={{ transform: `translateY(${-82 + progress * 88}px) scale(${0.72 + progress * 0.28})`, opacity: visible ? 1 : 0 }}><div className="relative flex size-32 items-center justify-center rounded-b-[42px] bg-card/90 shadow-[var(--shadow-editorial)] ring-1 ring-border/45 backdrop-blur-xl"><FoodPeekIllustration food={food} />{refreshing && <Loader2 className="absolute bottom-4 right-4 size-5 animate-spin text-primary" />}</div></div></div>;
+};
 
 const FeedErrorState = ({ message, onRetry }: { message: string; onRetry: () => void }) => <section className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">Could not load dishes</h2><p className="mt-1 text-sm font-semibold text-text-secondary">{message}</p><Button className="mt-4 rounded-full" onClick={onRetry}>Retry</Button></section>;
 
