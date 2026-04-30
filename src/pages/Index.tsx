@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -205,6 +205,8 @@ const navItems = [
 
 const suggestedSearches = ["Best steak near me", "Spicy ramen", "Crispy tacos", "Sushi rolls"];
 const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha dessert"];
+const pullRefreshFoods = ["pizza", "steak", "burger", "taco"] as const;
+type PullRefreshFood = typeof pullRefreshFoods[number];
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
