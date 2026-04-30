@@ -47,8 +47,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { AppUser, useAuthSession } from "@/hooks/useAuthSession";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+
+const supabaseAny = supabase as unknown as SupabaseClient;
 
 const AuthModal = lazy(() => import("@/components/AuthModal"));
 
@@ -589,7 +592,7 @@ const Index = () => {
         setLoading(false);
         return;
       }
-      const { data: trend } = await (supabase as any).from("dish_trend_metrics").select("trend_score,spike_score,status,is_hot_nearby,recent_share_count,recent_save_count,recent_rating_count").eq("dish_id", data.id).maybeSingle();
+      const { data: trend } = await supabaseAny.from("dish_trend_metrics").select("trend_score,spike_score,status,is_hot_nearby,recent_share_count,recent_save_count,recent_rating_count").eq("dish_id", data.id).maybeSingle();
       if (!cancelled) setItems((current) => [normalizeMenuItem(data as Record<string, unknown>, trend), ...current.filter((currentItem) => currentItem.slug !== data.slug)]);
     }).catch((error) => {
       if (!cancelled) setFeedError(error instanceof Error ? error.message : "Could not load this dish.");
@@ -667,8 +670,8 @@ const Index = () => {
     const { data, error } = await withTimeout(supabase.functions.invoke("dish-interaction", { body: { type: "toggle_action", dishId: item.id, action, enabled } }), 8000, "Save action").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Save timed out." }, error: null }));
     if (error || data?.error) return toast({ title: "Action not saved", description: data?.error ?? error?.message ?? "Try again.", variant: "destructive" });
     if (enabled && action === "want_to_try") {
-      const { data: collection } = await (supabase as any).from("collections").upsert({ user_id: sessionUser.id, name: "I want to try", slug: "i-want-to-try", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
-      if (collection?.id) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+      const { data: collection } = await supabaseAny.from("collections").upsert({ user_id: sessionUser.id, name: "I want to try", slug: "i-want-to-try", is_public: false, cover_image_url: item.cover_image_url ?? null }, { onConflict: "user_id,slug" }).select("id").single();
+      if (collection?.id) await supabaseAny.from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     }
     const flag = action === "favorite" ? "user_favorite" : "user_want_to_try";
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, ...data.dish, [flag]: enabled } : row));
@@ -1031,7 +1034,7 @@ const ReviewForm = ({ item, sessionUser, onProtected, onPublished }: { item: Men
       if (!suggestionId) { setCaptionStatus("failed"); return; }
       for (let attempt = 0; attempt < 5 && !cancelled; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 900));
-        const { data: row } = await (supabase as any).from("review_caption_suggestions").select("caption,status").eq("id", suggestionId).maybeSingle();
+        const { data: row } = await supabaseAny.from("review_caption_suggestions").select("caption,status").eq("id", suggestionId).maybeSingle();
         if (cancelled) return;
         if (row?.caption) { setCaptionSuggestion(row.caption); setCaptionStatus("ready"); return; }
         if (row?.status && row.status !== "pending") break;
@@ -1118,13 +1121,13 @@ const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { it
 
   useEffect(() => {
     if (!sessionUser) return;
-    (supabase as any).from("collections").select("id,name,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(20).then(({ data }: { data: Collection[] | null }) => setCollections(data ?? []));
+    supabaseAny.from("collections").select("id,name,description,slug,is_public,cover_image_url").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(20).then(({ data }: { data: Collection[] | null }) => setCollections(data ?? []));
   }, [sessionUser]);
 
   const addToCollection = async (collection: Collection) => {
     if (!sessionUser) return onProtected("Sign in to save dishes to collections.");
     if (!isUuid(item.id)) return toast({ title: "Demo item", description: "Open a saved dish before adding it to a collection.", variant: "destructive" });
-    const { error } = await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+    const { error } = await supabaseAny.from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     if (error) toast({ title: "Could not save dish", description: error.message, variant: "destructive" });
     else { toast({ title: "Saved to collection", description: collection.name }); onClose(); }
   };
@@ -1137,8 +1140,8 @@ const SaveToCollectionModal = ({ item, sessionUser, onClose, onProtected }: { it
     if (!parsed.success) return toast({ title: "Check your collection", description: parsed.error.issues[0]?.message, variant: "destructive" });
     setLoading(true);
     const slug = `${slugify(parsed.data.name)}-${Date.now()}`;
-    const { data: collection, error } = await (supabase as any).from("collections").insert({ name: parsed.data.name, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,name,description,slug,is_public,cover_image_url").single();
-    if (!error && collection) await (supabase as any).from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
+    const { data: collection, error } = await supabaseAny.from("collections").insert({ name: parsed.data.name, description: parsed.data.description || null, slug, is_public: parsed.data.is_public, cover_image_url: item.cover_image_url ?? null, user_id: sessionUser.id }).select("id,name,description,slug,is_public,cover_image_url").single();
+    if (!error && collection) await supabaseAny.from("collection_dishes").upsert({ collection_id: collection.id, dish_id: item.id }, { onConflict: "collection_id,dish_id" });
     setLoading(false);
     if (error) return toast({ title: "Collection not created", description: error.message, variant: "destructive" });
     toast({ title: "Collection created", description: `Saved to ${parsed.data.name}.` });
@@ -1208,7 +1211,7 @@ const ProfilePanel = ({ sessionUser, userLocation, onUseLocation, onProtected }:
       supabase.from("saved_items").select("dish_id,action_type,updated_at,created_at").eq("user_id", sessionUser.id).in("action_type", ["favorite", "want_to_try"]).order("updated_at", { ascending: false }).limit(30),
       supabase.from("ratings").select("dish_id,rating,updated_at,created_at").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(18),
       withTimeout(supabase.functions.invoke("want-to-try", { body: { latitude: userLocation?.latitude ?? null, longitude: userLocation?.longitude ?? null } }), 8000, "Want-to-try").catch((error) => ({ data: { error: error instanceof Error ? error.message : "Want-to-try timed out." }, error: null })),
-      (supabase as any).from("collections").select("id,name,description,slug,is_public,cover_image_url,collection_dishes(dishes(id,name,slug,cuisine,section,aggregate_rating,review_count)))").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(12),
+      supabaseAny.from("collections").select("id,name,description,slug,is_public,cover_image_url,collection_dishes(dishes(id,name,slug,cuisine,section,aggregate_rating,review_count)))").eq("user_id", sessionUser.id).order("updated_at", { ascending: false }).limit(12),
     ]).then(async ([savedResult, ratingsResult, wantToTryResult, collectionsResult]) => {
       if (!wantToTryResult.error && !wantToTryResult.data?.error) setWantToTryPlan((wantToTryResult.data?.dishes ?? []) as WantToTryDish[]);
       else setWantToTryPlan([]);
