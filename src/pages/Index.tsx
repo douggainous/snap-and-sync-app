@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -406,6 +406,7 @@ const Index = () => {
   const [pullFoodIndex, setPullFoodIndex] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const pullStartYRef = useRef<number | null>(null);
+  const pullDistanceRef = useRef(0);
   const pullArmedRef = useRef(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
