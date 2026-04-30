@@ -1074,7 +1074,7 @@ const AccountMenu = ({ sessionUser, onSelectView, onSignOut }: { sessionUser: No
   );
 };
 
-const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
+const ItemDetail = ({ item, transitionImageUrl, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; transitionImageUrl?: string | null; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const miles = distanceMiles(userLocation, item.restaurants);
@@ -1093,10 +1093,11 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   const labels = organicLabels(item);
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   const goBack = () => navigate("/");
+  const heroImageUrl = item.cover_image_url || transitionImageUrl;
   return (
     <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
       <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover animate-scale-in" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
+        {heroImageUrl ? <StableImage src={heroImageUrl} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover detail-hero-image" loading="eager" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} draggable={false} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/48 to-foreground/18" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background/85 via-background/25 to-transparent" />
         <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)]"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={goBack} aria-label="Back to feed"><ArrowLeft className="size-5" /></Button><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
