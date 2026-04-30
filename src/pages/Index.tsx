@@ -781,6 +781,11 @@ const Index = () => {
     setPullDistance(shouldRefresh ? 84 : 0);
     if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullDistance(0));
   };
+  const onFeedTouchCancel = () => {
+    pullStartYRef.current = null;
+    pullArmedRef.current = false;
+    setPullDistance(0);
+  };
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
