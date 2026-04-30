@@ -402,6 +402,11 @@ const Index = () => {
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullFoodIndex, setPullFoodIndex] = useState(0);
+  const [pullRefreshing, setPullRefreshing] = useState(false);
+  const pullStartYRef = useRef<number | null>(null);
+  const pullArmedRef = useRef(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
@@ -748,6 +753,34 @@ const Index = () => {
   };
 
   const displayedItems = items;
+  const pullRefreshFood = pullRefreshFoods[pullFoodIndex % pullRefreshFoods.length];
+  const refreshDiscoverFeed = useCallback(async () => {
+    setPullRefreshing(true);
+    setPullFoodIndex((index) => index + 1);
+    try {
+      await loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" });
+    } finally {
+      window.setTimeout(() => setPullRefreshing(false), 420);
+    }
+  }, [loadItems, userLocation]);
+  const onFeedTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (view !== "discover" || selectedItem || listSlug || loading || pullRefreshing || window.scrollY > 2) return;
+    pullStartYRef.current = event.touches[0]?.clientY ?? null;
+    pullArmedRef.current = true;
+  };
+  const onFeedTouchMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!pullArmedRef.current || pullStartYRef.current === null) return;
+    const distance = (event.touches[0]?.clientY ?? pullStartYRef.current) - pullStartYRef.current;
+    if (distance <= 0) return setPullDistance(0);
+    setPullDistance(Math.min(128, distance * 0.58));
+  };
+  const onFeedTouchEnd = () => {
+    const shouldRefresh = pullDistance >= 72;
+    pullStartYRef.current = null;
+    pullArmedRef.current = false;
+    setPullDistance(shouldRefresh ? 84 : 0);
+    if (shouldRefresh) void refreshDiscoverFeed().finally(() => setPullDistance(0));
+  };
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-background pb-28 text-foreground md:pb-8">
