@@ -399,7 +399,7 @@ const Index = () => {
   const [scanRestaurant, setScanRestaurant] = useState("");
   const [scanDish, setScanDish] = useState("");
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
-  const [listTarget, setListTarget] = useState<MenuItem | null>(null);
+  const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
 
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
