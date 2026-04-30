@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, forwardRef, ImgHTMLAttributes, KeyboardEvent, lazy, MouseEvent, PointerEvent as ReactPointerEvent, Suspense, TouchEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
@@ -220,6 +220,88 @@ const trendingQueries = ["Smash burger", "Birria", "Hot chicken", "Matcha desser
 const pullRefreshFoods = ["pizza", "steak", "burger", "taco"] as const;
 type PullRefreshFood = typeof pullRefreshFoods[number];
 
+const loadedImageUrls = new Set<string>();
+const pendingImageLoads = new Map<string, Promise<void>>();
+
+const preloadImage = (src?: string | null) => {
+  if (!src || loadedImageUrls.has(src)) return Promise.resolve();
+  const pending = pendingImageLoads.get(src);
+  if (pending) return pending;
+  const load = new Promise<void>((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      loadedImageUrls.add(src);
+      pendingImageLoads.delete(src);
+      resolve();
+    };
+    image.onerror = () => {
+      pendingImageLoads.delete(src);
+      resolve();
+    };
+    image.src = src;
+    void image.decode?.().then(() => {
+      loadedImageUrls.add(src);
+      pendingImageLoads.delete(src);
+      resolve();
+    }).catch(() => undefined);
+  });
+  pendingImageLoads.set(src, load);
+  return load;
+};
+
+type StableImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, "src" | "alt" | "loading" | "decoding"> & {
+  src: string;
+  alt: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+};
+
+const StableImage = ({ src, alt, className, loading = "lazy", fetchPriority = "auto", onLoad, ...props }: StableImageProps) => {
+  const [displaySrc, setDisplaySrc] = useState(src);
+  const [loaded, setLoaded] = useState(() => loadedImageUrls.has(src));
+
+  useEffect(() => {
+    if (src === displaySrc) {
+      setLoaded(loadedImageUrls.has(src));
+      return;
+    }
+    if (loadedImageUrls.has(src)) {
+      setDisplaySrc(src);
+      setLoaded(true);
+      return;
+    }
+    let active = true;
+    setLoaded(false);
+    void preloadImage(src).then(() => {
+      if (!active) return;
+      setDisplaySrc(src);
+      setLoaded(true);
+    });
+    return () => { active = false; };
+  }, [displaySrc, src]);
+
+  return (
+    <>
+      {!loaded && <div className="pointer-events-none absolute inset-0 image-skeleton bg-secondary" aria-hidden="true" />}
+      <img
+        {...props}
+        src={displaySrc}
+        alt={alt}
+        className={cn(className, "transition-[opacity,transform] duration-500 ease-out", loaded ? "opacity-100" : "opacity-0")}
+        loading={loading}
+        decoding="async"
+        fetchPriority={fetchPriority}
+        onLoad={(event) => {
+          loadedImageUrls.add(displaySrc);
+          setLoaded(true);
+          onLoad?.(event);
+        }}
+      />
+    </>
+  );
+};
+
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const parseSearchSort = (value: string | null): SearchSort => ["relevance", "trending", "rating", "nearby", "recent"].includes(value ?? "") ? value as SearchSort : "relevance";
 const formatPrice = (item: MenuItem) => item.price_min && item.price_max && item.price_min !== item.price_max ? `$${item.price_min}-${item.price_max}` : item.typical_price ? `$${item.typical_price}` : "Price pending";
@@ -331,7 +413,7 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string): 
   finally { if (timeoutId) clearTimeout(timeoutId); }
 };
 
-const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const FeedItemCard = ({ item, userLocation, priority = false, onDishAction, onAddToList, onImageIntent }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; priority?: boolean; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onImageIntent?: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -350,9 +432,9 @@ const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item:
 
   return (
     <article className="feed-reel group overflow-hidden rounded-[32px] bg-card shadow-[var(--shadow-editorial)] ring-1 ring-border/45 transition duration-200 active:scale-[0.99]">
-      <div className="image-skeleton relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
-        <Link to={`/dish/${item.slug}`} className="absolute inset-0 block" aria-label={`View details for ${item.name}`}>
-          {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" draggable={false} loading="lazy" decoding="async" sizes="(min-width: 1024px) 760px, 100vw" width={760} height={950} /> : <div className="flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-20 opacity-50" /></div>}
+      <div className="relative aspect-[4/5] w-full overflow-hidden bg-secondary sm:aspect-[16/11]">
+        <Link to={`/dish/${item.slug}`} className="absolute inset-0 block" aria-label={`View details for ${item.name}`} onMouseEnter={() => onImageIntent?.(item)} onTouchStart={() => onImageIntent?.(item)} onFocus={() => onImageIntent?.(item)}>
+          {item.cover_image_url ? <StableImage src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "dish"}`} className="h-full w-full object-cover group-hover:scale-105" draggable={false} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} sizes="(min-width: 1024px) 760px, 100vw" width={760} height={950} /> : <div className="flex h-full w-full items-center justify-center bg-secondary text-secondary-foreground"><ChefHat className="size-20 opacity-50" /></div>}
         </Link>
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/34 to-transparent" />
         <div className="absolute left-4 top-4 flex max-w-[calc(100%-8rem)] flex-wrap gap-2"><span className="soft-chip text-primary"><Star className="size-4 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.slice(0, 1).map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>)}</div>
@@ -361,7 +443,7 @@ const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item:
           <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-5" /></button>
           <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-5" /></button>
         </div>
-        <Link to={`/dish/${item.slug}`} className="absolute inset-x-0 bottom-0 block p-5 text-text-inverse sm:p-6">
+        <Link to={`/dish/${item.slug}`} className="absolute inset-x-0 bottom-0 block p-5 text-text-inverse sm:p-6" onMouseEnter={() => onImageIntent?.(item)} onTouchStart={() => onImageIntent?.(item)} onFocus={() => onImageIntent?.(item)}>
           <div className="max-w-[calc(100%-1rem)] sm:max-w-[72%]">
             <p className="mb-3 inline-flex max-w-full items-center gap-1.5 rounded-full bg-card/16 px-3 py-1 text-[11px] font-black backdrop-blur-md ring-1 ring-card/20"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
             <h2 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">{item.name}</h2>
@@ -374,10 +456,10 @@ const FeedItemCard = ({ item, userLocation, onDishAction, onAddToList }: { item:
   );
 };
 
-const SearchDishCard = ({ item, userLocation, onDishAction, onAddToList }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void }) => {
+const SearchDishCard = ({ item, userLocation, priority = false, onDishAction, onAddToList, onImageIntent }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; priority?: boolean; onAddToList?: (item: MenuItem) => void; onDishAction?: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onImageIntent?: (item: MenuItem) => void }) => {
   const miles = distanceMiles(userLocation, item.restaurants);
   const labels = organicLabels(item);
-  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><Link to={`/dish/${item.slug}`} className="block"><div className="image-skeleton relative aspect-[4/5] overflow-hidden">{item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" draggable={false} loading="lazy" decoding="async" sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/38 to-transparent" /><div className="absolute left-3 top-3 flex max-w-[calc(100%-4rem)] flex-wrap gap-1.5"><span className="soft-chip text-primary"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-3" />{label}</span>)}</div><button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /></button><button type="button" className="absolute right-3 top-16 thumb-action size-10" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-4" /></button><button type="button" className="absolute right-3 top-[6.5rem] thumb-action size-10" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button><div className="absolute inset-x-0 bottom-0 p-3 text-text-inverse"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></Link></article>;
+  return <article className="group min-w-0 max-w-full overflow-hidden rounded-[26px] bg-card shadow-[var(--shadow-soft)] ring-1 ring-border/55 transition duration-200 active:scale-[0.98]"><Link to={`/dish/${item.slug}`} className="block" onMouseEnter={() => onImageIntent?.(item)} onTouchStart={() => onImageIntent?.(item)} onFocus={() => onImageIntent?.(item)}><div className="relative aspect-[4/5] overflow-hidden bg-secondary">{item.cover_image_url ? <StableImage src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover group-hover:scale-105" draggable={false} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : "auto"} sizes="(min-width: 768px) 33vw, 50vw" /> : <div className="flex h-full items-center justify-center"><ChefHat className="size-12 opacity-40" /></div>}<div className="absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/38 to-transparent" /><div className="absolute left-3 top-3 flex max-w-[calc(100%-4rem)] flex-wrap gap-1.5"><span className="soft-chip text-primary"><Star className="size-3 fill-current" />{item.aggregate_rating.toFixed(1)}</span><SponsoredDisclosure item={item} compact />{labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-3" />{label}</span>)}</div><button type="button" className={cn("absolute right-3 top-3 thumb-action save-pop size-10", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={(event) => { event.preventDefault(); onDishAction?.(item, "want_to_try", !item.user_want_to_try); }} aria-label="Want to try"><Bookmark className={cn("size-4", item.user_want_to_try && "fill-current")} /></button><button type="button" className="absolute right-3 top-16 thumb-action size-10" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-4" /></button><button type="button" className="absolute right-3 top-[6.5rem] thumb-action size-10" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-4" /></button><div className="absolute inset-x-0 bottom-0 p-3 text-text-inverse"><h2 className="line-clamp-2 font-display text-2xl font-black leading-none">{item.name}</h2><p className="mt-1 line-clamp-1 text-xs font-bold">{item.restaurants?.name ?? "Dish"}{miles ? ` · ${miles.toFixed(1)} mi` : ""}</p></div></div></Link></article>;
 };
 
 const ItemCard = FeedItemCard;
@@ -417,6 +499,7 @@ const Index = () => {
   const [reviewRefreshKey, setReviewRefreshKey] = useState(0);
   const [favoriteTarget, setFavoriteTarget] = useState<MenuItem | null>(null);
   const [sharedDishNudgeDismissed, setSharedDishNudgeDismissed] = useState(false);
+  const [transitionImageUrl, setTransitionImageUrl] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [pullFoodIndex, setPullFoodIndex] = useState(0);
   const [pullRefreshing, setPullRefreshing] = useState(false);
@@ -436,6 +519,10 @@ const Index = () => {
   }, [location.pathname, selectedSlug, listSlug]);
 
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
+
+  useEffect(() => {
+    items.slice(0, 5).forEach((item) => { void preloadImage(item.cover_image_url); });
+  }, [items]);
 
   useEffect(() => {
     if (selectedSlug || listSlug) feedRequestRef.current += 1;
@@ -770,6 +857,10 @@ const Index = () => {
   };
 
   const displayedItems = items;
+  const primeDishImage = useCallback((item: MenuItem) => {
+    setTransitionImageUrl(item.cover_image_url ?? null);
+    void preloadImage(item.cover_image_url);
+  }, []);
   const pullRefreshFood = pullRefreshFoods[pullFoodIndex % pullRefreshFoods.length];
   const refreshDiscoverFeed = useCallback(async () => {
     setPullRefreshing(true);
@@ -821,15 +912,15 @@ const Index = () => {
   const onFeedPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     startFeedPull(event.clientY);
-    if (pullArmedRef.current) {
-      pullPointerIdRef.current = event.pointerId;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    }
+    if (pullArmedRef.current) pullPointerIdRef.current = event.pointerId;
   };
   const onFeedPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pullPointerIdRef.current !== null && event.pointerId !== pullPointerIdRef.current) return;
     moveFeedPull(event.clientY);
-    if (pullDistanceRef.current > 0) event.preventDefault();
+    if (pullDistanceRef.current > 0) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    }
   };
   const onFeedTouchEnd = () => endFeedPull();
   const onFeedPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -899,7 +990,7 @@ const Index = () => {
 
           {view === "discover" && !selectedItem && !listSlug && (
             <>
-              {loading && !pullRefreshing ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="relative min-w-0 max-w-full select-none overscroll-contain" onTouchStart={onFeedTouchStart} onTouchMove={onFeedTouchMove} onTouchEnd={onFeedTouchEnd} onTouchCancel={onFeedTouchCancel} onDragStart={(event) => event.preventDefault()} onPointerDown={onFeedPointerDown} onPointerMove={onFeedPointerMove} onPointerUp={onFeedPointerUp} onPointerCancel={onFeedPointerCancel}><PullRefreshPeek food={pullRefreshFood} distance={pullDistance} refreshing={pullRefreshing} /><div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2 transition-transform duration-300 ease-out" style={{ transform: `translateY(${pullRefreshing ? 34 : Math.min(pullDistance, 84)}px)` }}>{displayedItems.length ? displayedItems.map((item) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div></div>}
+              {loading && !pullRefreshing ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems("", false, "trending", userLocation, { cuisine: "all", rating: "0", sort: "relevance" })} /> : <div className="relative min-w-0 max-w-full select-none overscroll-contain" onTouchStart={onFeedTouchStart} onTouchMove={onFeedTouchMove} onTouchEnd={onFeedTouchEnd} onTouchCancel={onFeedTouchCancel} onDragStart={(event) => event.preventDefault()} onPointerDown={onFeedPointerDown} onPointerMove={onFeedPointerMove} onPointerUp={onFeedPointerUp} onPointerCancel={onFeedPointerCancel}><PullRefreshPeek food={pullRefreshFood} distance={pullDistance} refreshing={pullRefreshing} /><div className="feed-scroll min-w-0 max-w-full space-y-4 overflow-hidden pb-2 transition-transform duration-300 ease-out" style={{ transform: `translateY(${pullRefreshing ? 34 : Math.min(pullDistance, 84)}px)` }}>{displayedItems.length ? displayedItems.map((item, index) => <FeedItemCard key={item.id} item={item} userLocation={userLocation} priority={index < 2} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} onImageIntent={primeDishImage} />) : <div className="rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} /></div></div>}
             </>
           )}
 
@@ -920,13 +1011,13 @@ const Index = () => {
               </div>}
               {feedMode === "nearby" && <RestaurantDirectory restaurants={nearbyRestaurants} loading={loadingNearby} />}
               <div className="flex items-center justify-between px-1"><h1 className="font-display text-xl font-black">{query ? query : feedMode === "nearby" ? "Nearby" : feedMode === "recent" ? "New plates" : "Search"}</h1>{loading && <Loader2 className="animate-spin text-primary" />}</div>
-              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Try another search or capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} className="col-span-full" /></div>}
+              {loading ? <SearchResultsLoader /> : feedError ? <FeedErrorState message={feedError} onRetry={() => void loadItems(query, false, feedMode, userLocation)} /> : <div className="grid min-w-0 grid-cols-2 gap-3 md:grid-cols-3">{displayedItems.length ? displayedItems.map((item, index) => <SearchDishCard key={item.id} item={item} userLocation={userLocation} priority={index < 4} onDishAction={toggleDishAction} onAddToList={setFavoriteTarget} onImageIntent={primeDishImage} />) : <div className="col-span-full rounded-3xl border border-dashed bg-card p-6 text-center"><ChefHat className="mx-auto mb-3 size-10 text-primary" /><h2 className="font-display text-2xl font-black">No dishes yet</h2><p className="text-sm text-text-secondary">Try another search or capture the first plate.</p><Button className="mt-4 rounded-full" onClick={() => setView("scan")}><CameraIcon />Add dish</Button></div>}<FeedEndCard ref={loadMoreRef} loadingMore={loadingMore} hasMoreItems={hasMoreItems} onAddPost={() => setView("scan")} className="col-span-full" /></div>}
             </>
           )}
 
           {selectedSlug && !selectedItem && !listSlug && (loading ? <DishDetailLoader /> : <FeedErrorState message={feedError ?? "Dish not found."} onRetry={() => navigate("/")} />)}
 
-          {selectedItem && !listSlug && <><ItemDetail item={selectedItem} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />{!sessionUser && !sharedDishNudgeDismissed && <GuestConversionNudge onClose={() => setSharedDishNudgeDismissed(true)} onSignIn={() => setAuthPrompt("Track your favorite meals")} />}</>}
+          {selectedItem && !listSlug && <><ItemDetail item={selectedItem} transitionImageUrl={transitionImageUrl} userLocation={userLocation} sessionUser={sessionUser} onProtected={requireAuth} onSave={setFavoriteTarget} onDishAction={toggleDishAction} onReviewPublished={() => { setReviewRefreshKey((key) => key + 1); void loadItems(query, false, feedMode, userLocation); }} reviewRefreshKey={reviewRefreshKey} />{!sessionUser && !sharedDishNudgeDismissed && <GuestConversionNudge onClose={() => setSharedDishNudgeDismissed(true)} onSignIn={() => setAuthPrompt("Track your favorite meals")} />}</>}
 
           {view === "scan" && (
             <section className="-mx-3 space-y-3 overflow-hidden md:mx-0">
@@ -983,7 +1074,7 @@ const AccountMenu = ({ sessionUser, onSelectView, onSignOut }: { sessionUser: No
   );
 };
 
-const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
+const ItemDetail = ({ item, transitionImageUrl, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; transitionImageUrl?: string | null; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const miles = distanceMiles(userLocation, item.restaurants);
@@ -1002,10 +1093,11 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   const labels = organicLabels(item);
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
   const goBack = () => navigate("/");
+  const heroImageUrl = item.cover_image_url || transitionImageUrl;
   return (
     <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
       <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
-        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover animate-scale-in" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
+        {heroImageUrl ? <StableImage src={heroImageUrl} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover detail-hero-image" loading="eager" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} draggable={false} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/95 via-foreground/48 to-foreground/18" />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background/85 via-background/25 to-transparent" />
         <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)]"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={goBack} aria-label="Back to feed"><ArrowLeft className="size-5" /></Button><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>

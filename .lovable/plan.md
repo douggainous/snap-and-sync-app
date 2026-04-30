@@ -1,39 +1,43 @@
-I’ll update the dish/post detail experience so it feels like a place-focused info page rather than a rating flow.
+I’ll make the feed and detail images feel much more stable by keeping already-loaded images visible, preloading likely next images, and avoiding skeleton flicker when navigating.
 
 Plan:
 
-1. Add a back arrow in the upper-left of the detail page
-- Place it over the hero image in the upper-left, styled as a round translucent button.
-- It will return the user to the previous page when possible, otherwise route back to the main Discover feed.
-- Keep share/copy controls on the opposite side.
+1. Add a reusable stable image component
+- Create a small in-memory image cache for image URLs during the current app session.
+- Track image load state per URL so a previously loaded feed image does not flash back to an empty skeleton when it appears elsewhere.
+- Keep the current image visible until the next image finishes loading instead of swapping to an empty state.
+- Use a soft opacity fade-in only on first load.
+- Respect `loading`, `decoding`, `fetchPriority`, `sizes`, and dimensions for feed vs detail contexts.
 
-2. Make the detail image feel immersive
-- Adjust the detail page layout so the hero image reaches the top and side edges of the mobile viewport, rather than sitting inside the normal feed padding.
-- Add a scroll-responsive hero treatment: the image stays visually prominent at the top, while a gradient fade at the bottom transitions into the content below.
-- Preserve a smooth transition from feed card to detail by using similar image proportions, rounded-corner reduction on mobile, and a subtle enter animation.
+2. Use stable images in the Discover feed and search cards
+- Replace raw `<img>` tags in `FeedItemCard` and `SearchDishCard` with the stable image component.
+- Prevent the pulsing skeleton from showing over images that are already cached or loaded.
+- Make above-the-fold feed images load eagerly/high priority while keeping lower items lazy.
+- Add a subtle placeholder only for genuinely unloaded images.
 
-3. Shift the detail page away from rating-first content
-- Remove the prominent “Rate this dish” call-to-action from the hero.
-- Move reviews/ratings lower on the page or de-emphasize them so the detail page focuses on learning about the post and restaurant.
-- Keep rating functionality available in the app’s create/scan flow rather than making it the primary action here.
+3. Smooth the transition from feed card to details
+- When a user taps a feed/search card, record the clicked dish image URL as the “transition image”.
+- On the detail page, render the exact same cached image URL immediately in the hero so it does not reload from empty.
+- Add a short route-level crossfade/scale transition so the detail hero feels like it continues from the card instead of blinking.
+- Remove/soften any animation that makes the detail image appear to reload unnecessarily.
 
-4. Add a restaurant information section
-- Make the main content include the restaurant name, address/city, distance when available, cuisine/type, price level, current business status if present, phone, website, email, and map/directions actions.
-- Add clear action buttons for:
-  - Want to try / bookmark
-  - Directions
-  - Call
-  - Website
-  - Share
-- If exact hours, reservations, dine-in, carryout, delivery, Uber Eats, or DoorDash links are not currently stored in the database, I’ll display graceful “Not listed yet” style rows rather than fake data.
+4. Preload detail and nearby feed images
+- Preload the first few feed images after feed data arrives.
+- On hover/touch-start/focus of a card, preload that item’s detail image before navigation completes.
+- Add lightweight browser hints (`new Image()`, `decode()` when supported) without blocking the UI.
 
-5. Add ordering/reservation affordances where possible
-- If the restaurant website is available, provide an “Order / menu” link to the website as the safest existing destination.
-- Add placeholders/disabled rows for reservations, delivery, DoorDash, and Uber Eats when no structured links exist yet.
-- Technical note: the current restaurant schema does not appear to include hours, reservations, dine-in/carryout/delivery flags, or third-party ordering URLs. I will not invent those values. If you want those to be real editable data later, a follow-up backend migration can add those fields.
+5. Preserve feed state when returning from details
+- Avoid clearing or refetching the feed when navigating into a detail route.
+- Keep the existing item list mounted/stateful where possible so returning to the feed doesn’t create unnecessary image churn.
+- Ensure pull-to-refresh still intentionally refreshes the feed, but normal navigation does not.
 
-Technical details:
-- Main file to update: `src/pages/Index.tsx`.
-- Existing `Restaurant` and `MenuItem` types will be extended locally only for optional future fields if needed, without changing generated backend type files.
-- The existing detail fetch already loads restaurant fields like phone, website, email, address, maps URL, rating, review count, price level, and business status.
-- I’ll avoid editing generated integration files.
+6. Polish CSS for perceived performance
+- Adjust `.image-skeleton` so it doesn’t animate behind loaded images.
+- Add stable background colors and `will-change` only where helpful.
+- Ensure images use `draggable={false}` and no browser drag ghosting on touch.
+
+Technical notes:
+- Most of this will be contained in `src/pages/Index.tsx`, with a small CSS adjustment in `src/index.css` if needed.
+- No database changes are needed.
+- I’ll avoid editing generated backend integration files.
+- I’ll verify the main flows at the current mobile viewport: Discover feed initial load, tapping into details, and back to feed.
