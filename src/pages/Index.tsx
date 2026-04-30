@@ -2,8 +2,10 @@ import { ChangeEvent, FormEvent, forwardRef, KeyboardEvent, lazy, MouseEvent, Po
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import {
+  ArrowLeft,
   Bookmark,
   Camera as CameraIcon,
+  CalendarCheck,
   ChefHat,
   Clock,
   Compass,
@@ -25,6 +27,9 @@ import {
   Share2,
   Sparkles,
   Star,
+  Store,
+  Truck,
+  Utensils,
   Upload,
   User,
   Globe,
@@ -78,6 +83,13 @@ type Restaurant = {
   business_status?: string | null;
   maps_url?: string | null;
   photo_reference?: string | null;
+  hours?: string | null;
+  accepts_reservations?: boolean | null;
+  offers_dine_in?: boolean | null;
+  offers_carryout?: boolean | null;
+  offers_delivery?: boolean | null;
+  uber_eats_url?: string | null;
+  doordash_url?: string | null;
 };
 type MenuItem = {
   id: string;
@@ -283,6 +295,9 @@ const SponsoredDisclosure = ({ item, compact = false }: { item: MenuItem; compac
 const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
+const mapsPlaceUrl = (restaurant?: Restaurant | null) => restaurant?.maps_url || (restaurant ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([restaurant.name, restaurant.address, restaurant.city].filter(Boolean).join(" "))}` : "");
+const availabilityLabel = (value?: boolean | null) => value == null ? "Not listed yet" : value ? "Available" : "Not offered";
+const priceLevelLabel = (level?: number | null) => level ? "$".repeat(Math.max(1, Math.min(4, level))) : "Not listed yet";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
 type DbError = { message: string };
 type InsertResult = Promise<{ error: DbError | null }>;
@@ -911,10 +926,13 @@ const AccountMenu = ({ sessionUser, onSelectView, onSignOut }: { sessionUser: No
 
 const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDishAction, onReviewPublished, reviewRefreshKey }: { item: MenuItem; userLocation: { latitude: number; longitude: number } | null; sessionUser: UserSession; onProtected: (message: string) => void; onSave: (item: MenuItem) => void; onDishAction: (item: MenuItem, action: "want_to_try" | "favorite", enabled: boolean) => void; onReviewPublished: () => void; reviewRefreshKey: number }) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const miles = distanceMiles(userLocation, item.restaurants);
   const callUrl = phoneHref(item.restaurants?.phone);
   const webUrl = websiteHref(item.restaurants?.website_url);
   const mailUrl = emailHref(item.restaurants?.email);
+  const mapUrl = mapsPlaceUrl(item.restaurants);
+  const orderUrl = websiteHref(item.restaurants?.uber_eats_url) || websiteHref(item.restaurants?.doordash_url) || webUrl;
   const shareItem = async () => {
     await shareDishLink(item, "native");
   };
@@ -924,26 +942,44 @@ const ItemDetail = ({ item, userLocation, sessionUser, onProtected, onSave, onDi
   };
   const labels = organicLabels(item);
   const relatedSearches = [item.cuisine, item.section, ...item.tags].filter(Boolean).slice(0, 5) as string[];
+  const goBack = () => navigate("/");
   return (
-    <section className="max-w-full space-y-4 overflow-hidden">
-      <div className="relative min-h-[calc(100svh-108px)] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] ring-1 ring-border/60 md:min-h-[760px] md:rounded-[32px]">
-        <div className="flex h-full max-w-full snap-x snap-mandatory overflow-hidden">
-          {[item.cover_image_url].filter(Boolean).map((photo) => <div key={photo} className="image-skeleton h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center sm:min-h-[620px] md:h-[760px]"><img src={photo!} alt={`${item.name} menu item`} className="h-full w-full object-cover" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 760px, 100vw" width={900} height={1200} /></div>)}
-          {!item.cover_image_url && <div className="flex h-[calc(100svh-108px)] min-h-[460px] w-full shrink-0 snap-center items-center justify-center bg-secondary sm:min-h-[620px] md:h-[760px]"><ChefHat className="size-20 opacity-40" /></div>}
-        </div>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-foreground/90 via-foreground/42 to-foreground/28" />
-        <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2"><div className="flex min-w-0 flex-wrap gap-2"><SponsoredDisclosure item={item} />{labels.length ? labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>) : !item.is_sponsored && <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}</div><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
-        <div className="absolute inset-x-0 bottom-0 space-y-4 p-4 pb-28 md:p-7 lg:pb-7">
-          <div className="min-w-0"><h1 className="break-words font-display text-4xl font-black leading-[0.92] sm:text-5xl md:text-7xl">{item.name}</h1>{item.description && <p className="mt-2 line-clamp-2 max-w-2xl text-sm font-semibold text-text-inverse">{item.description}</p>}</div>
-          <div className="flex min-w-0 flex-wrap items-end justify-between gap-3"><div className="min-w-0"><p className="font-display text-4xl font-black text-primary sm:text-5xl">{item.aggregate_rating.toFixed(1)}<span className="text-2xl">★</span></p><p className="text-xs font-bold text-text-secondary">{item.review_count} reviews · {formatPrice(item)}</p></div><div className="flex gap-2"><button type="button" className={cn("thumb-action save-pop", item.user_favorite && "bg-primary text-primary-foreground animate-scale-in")} onClick={() => onDishAction(item, "favorite", !item.user_favorite)} aria-label="Save dish"><Heart className={cn("size-5", item.user_favorite && "fill-current")} /></button><button type="button" className={cn("thumb-action save-pop", item.user_want_to_try && "bg-accent text-accent-foreground animate-scale-in")} onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)} aria-label="Want to try"><Bookmark className={cn("size-5", item.user_want_to_try && "fill-current")} /></button></div></div>
-          <Button className="h-12 w-full rounded-full" onClick={() => document.getElementById("review-menu-item")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Star />Rate this dish</Button>
-          {!sessionUser && <Button className="h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Save dishes you want to try") }><Bookmark />Save for later</Button>}
+    <section className="-mx-3 -mt-3 max-w-[calc(100%+1.5rem)] space-y-0 overflow-visible lg:mx-0 lg:mt-0 lg:max-w-full">
+      <div className="sticky top-0 z-0 h-[76svh] min-h-[540px] w-full max-w-full overflow-hidden bg-secondary shadow-[var(--shadow-editorial)] md:h-[780px] md:rounded-[32px]">
+        {item.cover_image_url ? <img src={item.cover_image_url} alt={`${item.name} at ${item.restaurants?.name ?? "restaurant"}`} className="h-full w-full object-cover animate-scale-in" loading="eager" decoding="async" fetchPriority="high" sizes="(min-width: 768px) 900px, 100vw" width={900} height={1200} /> : <div className="flex h-full w-full items-center justify-center bg-secondary"><ChefHat className="size-20 opacity-40" /></div>}
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-foreground/28 to-foreground/24" />
+        <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)]"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={goBack} aria-label="Back to feed"><ArrowLeft className="size-5" /></Button><div className="flex shrink-0 gap-2"><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={copyLink} aria-label="Copy dish link"><Copy className="size-5" /></Button><Button size="icon" variant="secondary" className="size-11 rounded-full bg-card/95 backdrop-blur-xl" onClick={shareItem} aria-label="Share dish"><Share2 className="size-5" /></Button></div></div>
+        <div className="absolute inset-x-0 bottom-0 space-y-4 p-4 pb-24 md:p-7 md:pb-10">
+          <div className="flex min-w-0 flex-wrap gap-2"><SponsoredDisclosure item={item} />{labels.length ? labels.map((label) => <span key={label} className="soft-chip text-primary"><Sparkles className="size-4" />{label}</span>) : !item.is_sponsored && <span className="soft-chip">{item.cuisine || item.section || "Dish"}</span>}</div>
+          <div className="min-w-0"><h1 className="break-words font-display text-5xl font-black leading-[0.9] text-text-inverse sm:text-6xl md:text-7xl">{item.name}</h1>{item.description && <p className="mt-3 max-w-2xl text-base font-semibold text-text-inverse/90 md:text-lg">{item.description}</p>}</div>
+          <p className="flex min-w-0 items-center gap-2 text-sm font-black text-text-inverse"><MapPin className="size-4 shrink-0 text-primary" /><span className="truncate">{item.restaurants?.name ?? "Restaurant pending"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
         </div>
       </div>
-      <div className="max-w-full space-y-4"><div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_300px]"><div className="space-y-4"><ReviewForm item={item} sessionUser={sessionUser} onProtected={onProtected} onPublished={onReviewPublished} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div><div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} /><div className="rounded-3xl glass-surface p-4"><h2 className="font-display text-2xl font-black">Place</h2><p className="mt-2 font-bold">{item.restaurants?.name}</p><p className="text-sm text-text-secondary">{[item.restaurants?.address, item.restaurants?.city, miles ? `${miles.toFixed(1)} mi` : null].filter(Boolean).join(" · ")}</p><div className="mt-3 grid gap-2"><Button className="w-full rounded-full" asChild><a href={mapsDirectionsUrl(item.restaurants, "driving")} target="_blank" rel="noreferrer"><Navigation />Drive</a></Button><Button className="w-full rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(item.restaurants, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{callUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={callUrl}><Phone />Call</a></Button>}{webUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={webUrl} target="_blank" rel="noreferrer"><Globe />Website</a></Button>}{mailUrl && <Button className="w-full rounded-full" variant="outline" asChild><a href={mailUrl}><Mail />Email</a></Button>}</div></div>{isUuid(item.id) && <RestaurantDishTools item={item} sessionUser={sessionUser} onProtected={onProtected} />}</div></div></div>
+      <div className="relative z-10 -mt-16 space-y-4 px-3 pb-6 lg:px-0">
+        <div className="rounded-[28px] bg-background p-4 shadow-[0_-24px_60px_hsl(var(--background)/0.86)] md:p-5">
+          <div className="grid gap-3 sm:grid-cols-2"><Button className="h-12 rounded-full" onClick={() => onDishAction(item, "want_to_try", !item.user_want_to_try)}><Bookmark className={cn(item.user_want_to_try && "fill-current")} />{item.user_want_to_try ? "Saved to try" : "Want to try"}</Button><Button className="h-12 rounded-full" variant="outline" onClick={() => onSave(item)}><Plus />Add to list</Button></div>
+          {!sessionUser && <Button className="mt-3 h-11 w-full rounded-full" variant="secondary" onClick={() => onProtected("Save dishes you want to try") }><Bookmark />Save for later</Button>}
+        </div>
+        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4"><RestaurantInfoPanel item={item} miles={miles} callUrl={callUrl} webUrl={webUrl} mailUrl={mailUrl} mapUrl={mapUrl} orderUrl={orderUrl} /><OrderingPanel restaurant={item.restaurants} orderUrl={orderUrl} /><ReviewFeed item={item} refreshKey={reviewRefreshKey} /></div>
+          <div className="space-y-4"><RelatedDishes tags={relatedSearches} currentName={item.name} />{isUuid(item.id) && <RestaurantDishTools item={item} sessionUser={sessionUser} onProtected={onProtected} />}</div>
+        </div>
+      </div>
     </section>
   );
 };
+
+const InfoRow = ({ icon: Icon, label, value, href }: { icon: typeof Star; label: string; value: string; href?: string }) => {
+  const content = <><Icon className="size-5 shrink-0 text-primary" /><span className="min-w-0 flex-1"><span className="block text-[11px] font-black uppercase tracking-normal text-text-secondary">{label}</span><span className="block truncate text-sm font-black">{value}</span></span></>;
+  return href ? <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined} className="flex min-w-0 items-center gap-3 rounded-2xl bg-secondary/75 p-3 transition active:scale-[0.98]">{content}</a> : <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-secondary/75 p-3">{content}</div>;
+};
+
+const RestaurantInfoPanel = ({ item, miles, callUrl, webUrl, mailUrl, mapUrl, orderUrl }: { item: MenuItem; miles: number | null; callUrl: string; webUrl: string; mailUrl: string; mapUrl: string; orderUrl: string }) => {
+  const restaurant = item.restaurants;
+  return <section className="rounded-[28px] glass-surface p-4 md:p-5"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="font-display text-3xl font-black">{restaurant?.name ?? "Restaurant"}</h2><p className="mt-1 text-sm font-bold text-text-secondary">{[restaurant?.address, restaurant?.city, miles ? `${miles.toFixed(1)} mi away` : null].filter(Boolean).join(" · ") || "Location not listed yet"}</p></div>{restaurant?.rating ? <span className="soft-chip text-primary"><Star className="size-4 fill-current" />{restaurant.rating.toFixed(1)}</span> : null}</div><div className="mt-4 grid gap-2 sm:grid-cols-2"><InfoRow icon={Utensils} label="Cuisine" value={restaurant?.cuisine || item.cuisine || "Not listed yet"} /><InfoRow icon={Clock} label="Hours" value={restaurant?.hours || "Not listed yet"} /><InfoRow icon={Store} label="Price" value={priceLevelLabel(restaurant?.price_level)} /><InfoRow icon={Sparkles} label="Status" value={restaurant?.business_status?.replace(/_/g, " ") || "Not listed yet"} /><InfoRow icon={MapPin} label="Address" value={[restaurant?.address, restaurant?.city].filter(Boolean).join(", ") || "Not listed yet"} href={mapUrl} />{callUrl ? <InfoRow icon={Phone} label="Phone" value={restaurant?.phone ?? "Call"} href={callUrl} /> : <InfoRow icon={Phone} label="Phone" value="Not listed yet" />}{webUrl ? <InfoRow icon={Globe} label="Website" value="Open website" href={webUrl} /> : <InfoRow icon={Globe} label="Website" value="Not listed yet" />}{mailUrl ? <InfoRow icon={Mail} label="Email" value={restaurant?.email ?? "Email"} href={mailUrl} /> : <InfoRow icon={Mail} label="Email" value="Not listed yet" />}</div><div className="mt-4 grid gap-2 sm:grid-cols-2"><Button className="h-12 rounded-full" asChild><a href={mapsDirectionsUrl(restaurant, "driving")} target="_blank" rel="noreferrer"><Navigation />Directions</a></Button><Button className="h-12 rounded-full" variant="outline" asChild><a href={mapsDirectionsUrl(restaurant, "walking")} target="_blank" rel="noreferrer"><Footprints />Walk</a></Button>{orderUrl && <Button className="h-12 rounded-full" variant="outline" asChild><a href={orderUrl} target="_blank" rel="noreferrer"><Truck />Order / menu</a></Button>}</div></section>;
+};
+
+const OrderingPanel = ({ restaurant, orderUrl }: { restaurant?: Restaurant | null; orderUrl: string }) => <section className="rounded-[28px] glass-surface p-4 md:p-5"><h2 className="font-display text-3xl font-black">Ways to get it</h2><div className="mt-4 grid gap-2 sm:grid-cols-2"><InfoRow icon={CalendarCheck} label="Reservations" value={availabilityLabel(restaurant?.accepts_reservations)} /><InfoRow icon={Utensils} label="Dine in" value={availabilityLabel(restaurant?.offers_dine_in)} /><InfoRow icon={Store} label="Carryout" value={availabilityLabel(restaurant?.offers_carryout)} /><InfoRow icon={Truck} label="Delivery" value={availabilityLabel(restaurant?.offers_delivery)} /></div><div className="mt-4 grid gap-2 sm:grid-cols-2">{websiteHref(restaurant?.uber_eats_url) ? <Button className="h-12 rounded-full" asChild><a href={restaurant!.uber_eats_url!} target="_blank" rel="noreferrer"><Truck />Uber Eats</a></Button> : <Button className="h-12 rounded-full" variant="outline" disabled><Truck />Uber Eats not listed</Button>}{websiteHref(restaurant?.doordash_url) ? <Button className="h-12 rounded-full" asChild><a href={restaurant!.doordash_url!} target="_blank" rel="noreferrer"><Truck />DoorDash</a></Button> : <Button className="h-12 rounded-full" variant="outline" disabled><Truck />DoorDash not listed</Button>}{orderUrl && <Button className="h-12 rounded-full sm:col-span-2" variant="secondary" asChild><a href={orderUrl} target="_blank" rel="noreferrer"><Globe />Restaurant ordering</a></Button>}</div></section>;
 
 const Metric = ({ icon: Icon, label, value }: { icon: typeof Star; label: string; value: string }) => <div className="rounded-2xl bg-secondary/80 p-3"><Icon className="mb-2 size-5 text-primary" /><p className="font-display text-xl font-black">{value}</p><p className="text-[11px] font-bold text-text-secondary">{label}</p></div>;
 
