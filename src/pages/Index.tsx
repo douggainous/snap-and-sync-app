@@ -875,7 +875,9 @@ const Index = () => {
       document.removeEventListener("touchend", handleTouchEnd);
       document.removeEventListener("touchcancel", handleTouchEnd);
     };
-  }, [view, selectedItem, listSlug, loading, pullRefreshing, startFeedPull, moveFeedPull, endFeedPull]);
+  // Gesture helpers intentionally read the latest refs/state during touch events.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, selectedItem, listSlug, loading, pullRefreshing]);
 
   return (
     <main className="min-h-screen w-full max-w-full overflow-x-hidden overscroll-y-contain bg-background pb-28 text-foreground md:pb-8">
