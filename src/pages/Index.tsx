@@ -83,6 +83,13 @@ type Restaurant = {
   business_status?: string | null;
   maps_url?: string | null;
   photo_reference?: string | null;
+  hours?: string | null;
+  accepts_reservations?: boolean | null;
+  offers_dine_in?: boolean | null;
+  offers_carryout?: boolean | null;
+  offers_delivery?: boolean | null;
+  uber_eats_url?: string | null;
+  doordash_url?: string | null;
 };
 type MenuItem = {
   id: string;
