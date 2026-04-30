@@ -295,6 +295,9 @@ const SponsoredDisclosure = ({ item, compact = false }: { item: MenuItem; compac
 const phoneHref = (phone?: string | null) => phone ? `tel:${phone.replace(/[^+\d]/g, "")}` : "";
 const websiteHref = (url?: string | null) => url && /^https?:\/\//i.test(url) ? url : "";
 const emailHref = (email?: string | null) => email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? `mailto:${email}` : "";
+const mapsPlaceUrl = (restaurant?: Restaurant | null) => restaurant?.maps_url || (restaurant ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([restaurant.name, restaurant.address, restaurant.city].filter(Boolean).join(" "))}` : "");
+const availabilityLabel = (value?: boolean | null) => value == null ? "Not listed yet" : value ? "Available" : "Not offered";
+const priceLevelLabel = (level?: number | null) => level ? "$".repeat(Math.max(1, Math.min(4, level))) : "Not listed yet";
 const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file); });
 type DbError = { message: string };
 type InsertResult = Promise<{ error: DbError | null }>;
