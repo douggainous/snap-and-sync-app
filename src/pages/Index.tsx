@@ -443,7 +443,7 @@ const FeedItemCard = ({ item, userLocation, priority = false, onDishAction, onAd
           <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); onAddToList?.(item); }} aria-label="Add to list"><Plus className="size-5" /></button>
           <button type="button" className="thumb-action size-14 bg-card/92" onClick={(event) => { event.preventDefault(); void shareDishLink(item); }} aria-label="Share dish"><Share2 className="size-5" /></button>
         </div>
-        <Link to={`/dish/${item.slug}`} className="absolute inset-x-0 bottom-0 block p-5 text-text-inverse sm:p-6">
+        <Link to={`/dish/${item.slug}`} className="absolute inset-x-0 bottom-0 block p-5 text-text-inverse sm:p-6" onMouseEnter={() => onImageIntent?.(item)} onTouchStart={() => onImageIntent?.(item)} onFocus={() => onImageIntent?.(item)}>
           <div className="max-w-[calc(100%-1rem)] sm:max-w-[72%]">
             <p className="mb-3 inline-flex max-w-full items-center gap-1.5 rounded-full bg-card/16 px-3 py-1 text-[11px] font-black backdrop-blur-md ring-1 ring-card/20"><MapPin className="size-3 shrink-0" /><span className="truncate">{item.restaurants?.name ?? "Standalone dish"}{miles ? ` · ${miles.toFixed(1)} mi` : item.restaurants?.city ? ` · ${item.restaurants.city}` : ""}</span></p>
             <h2 className="break-words font-display text-4xl font-black leading-none sm:text-5xl">{item.name}</h2>
@@ -912,15 +912,15 @@ const Index = () => {
   const onFeedPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     startFeedPull(event.clientY);
-    if (pullArmedRef.current) {
-      pullPointerIdRef.current = event.pointerId;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-    }
+    if (pullArmedRef.current) pullPointerIdRef.current = event.pointerId;
   };
   const onFeedPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (pullPointerIdRef.current !== null && event.pointerId !== pullPointerIdRef.current) return;
     moveFeedPull(event.clientY);
-    if (pullDistanceRef.current > 0) event.preventDefault();
+    if (pullDistanceRef.current > 0) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    }
   };
   const onFeedTouchEnd = () => endFeedPull();
   const onFeedPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
