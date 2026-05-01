@@ -514,8 +514,8 @@ const Index = () => {
 
   useLayoutEffect(() => {
     if (!selectedSlug || listSlug) return;
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.scrollingElement?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [selectedSlug, listSlug]);
 
   useEffect(() => {
