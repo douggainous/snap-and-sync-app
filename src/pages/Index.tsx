@@ -291,7 +291,7 @@ const StableImage = ({ src, alt, className, loading = "lazy", fetchPriority = "a
         className={cn(className, "transition-[opacity,transform] duration-500 ease-out", loaded ? "opacity-100" : "opacity-0")}
         loading={loading}
         decoding="async"
-        fetchpriority={fetchPriority}
+        fetchPriority={fetchPriority}
         onLoad={(event) => {
           loadedImageUrls.add(displaySrc);
           setLoaded(true);
