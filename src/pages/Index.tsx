@@ -508,6 +508,7 @@ const Index = () => {
   const pullArmedRef = useRef(false);
   const pullPointerIdRef = useRef<number | null>(null);
 
+  const isHomeRoute = location.pathname === "/" || location.pathname === "/index";
   const selectedSlug = location.pathname.startsWith("/dish/") ? location.pathname.split("/dish/")[1] : location.pathname.startsWith("/items/") ? location.pathname.split("/items/")[1] : null;
   const listSlug = location.pathname.startsWith("/lists/") ? location.pathname.split("/lists/")[1] : null;
   const selectedItem = useMemo(() => items.find((item) => item.slug === selectedSlug) ?? null, [items, selectedSlug]);
@@ -521,8 +522,8 @@ const Index = () => {
   useEffect(() => {
     if (selectedSlug || listSlug) return;
     if (location.pathname === "/search") setView("search");
-    else if (location.pathname === "/") setView((current) => current === "search" ? "discover" : current);
-  }, [location.pathname, selectedSlug, listSlug]);
+    else if (isHomeRoute) setView((current) => current === "search" ? "discover" : current);
+  }, [isHomeRoute, location.pathname, selectedSlug, listSlug]);
 
   useEffect(() => { itemsLengthRef.current = items.length; }, [items.length]);
 
